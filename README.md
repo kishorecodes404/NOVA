@@ -1,6 +1,9 @@
 # NOVA — V3: RAG Document Chatbot
 
 NOVA is a Streamlit AI chatbot powered by Google Gemini. Version 3 adds Retrieval-Augmented Generation (RAG), allowing users to upload PDF documents and ask questions based on their contents.
+## Live Demo
+
+🔗 [Open NOVA](https://novaaichatbot.streamlit.app/)  
 
 ## Features
 
