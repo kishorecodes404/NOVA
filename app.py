@@ -17,7 +17,7 @@ import streamlit as st
 from google import genai
 from dotenv import load_dotenv
 load_dotenv()
-from rag import index_pdf, retrieve_context, clear_documents
+from rag import index_document, retrieve_context, clear_documents
 # ---------------------------------------------------
 # Configuration
 # ---------------------------------------------------
@@ -283,7 +283,7 @@ def get_gemini_history():
 
 
 def generate_response(api_key, model_name, question):
-    """Generate an answer using relevant PDF content when available."""
+    """Generate an answer using relevant document content when available."""
     context, sources = retrieve_context(question, api_key)
 
     client = genai.Client(api_key=api_key)
@@ -341,9 +341,9 @@ def render_sidebar(api_key):
         st.divider()
 
         uploaded_file = st.file_uploader(
-            "Add a PDF",
-            type=["pdf"],
-            help="Upload a PDF so NOVA can answer questions from it.",
+            "Add a document",
+            type=["pdf", "txt", "docx", "csv", "xlsx", "doc"],
+            help="Upload a document so NOVA can answer questions from it.",
         )
 
         if uploaded_file is not None:
@@ -352,8 +352,8 @@ def render_sidebar(api_key):
                     st.error("Your GEMINI_API_KEY was not found.")
                 else:
                     try:
-                        with st.spinner("Reading and indexing PDF..."):
-                            chunk_count, message = index_pdf(
+                        with st.spinner("Reading and indexing document..."):
+                            chunk_count, message = index_document(
                                 uploaded_file,
                                 api_key,
                             )
@@ -366,11 +366,11 @@ def render_sidebar(api_key):
                             st.info(message)
 
                     except Exception as error:
-                        st.error(f"Could not add this PDF: {error}")
+                        st.error(f"Could not add this document: {error}")
 
         if st.button("Clear documents", use_container_width=True):
             clear_documents()
-            st.success("All uploaded PDFs were removed.")
+            st.success("All uploaded documents were removed.")
 
         st.divider()
 
@@ -381,7 +381,7 @@ def render_sidebar(api_key):
         st.markdown(
             """
             <p class="sidebar-note">
-                Upload a PDF, click Add document, then ask NOVA questions
+                Upload a document, click Add document, then ask NOVA questions
                 about its contents.
             </p>
             """,

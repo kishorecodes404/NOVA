@@ -3,3 +3,6 @@ google-genai
 python-dotenv
 pypdf
 chromadb
+python-docx
+pandas
+openpyxl

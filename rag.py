@@ -5,6 +5,10 @@ from pathlib import Path
 import chromadb
 from google import genai
 from pypdf import PdfReader
+import pandas as pd
+from docx import Document
+from pypdf import PdfReader
+
 
 
 CHROMA_PATH = Path("chroma_db")
@@ -49,39 +53,137 @@ def create_embedding(text, api_key):
 
     return response.embeddings[0].values
 
+def extract_text_from_pdf(uploaded_file):
+    """Extract text from a PDF file."""
+    reader = PdfReader(uploaded_file)
 
-def index_pdf(uploaded_file, api_key):
-    """
-    Read an uploaded PDF, split it into chunks,
-    embed the chunks, and save them in ChromaDB.
-    """
-    file_bytes = uploaded_file.getvalue()
-    document_id = hashlib.sha256(file_bytes).hexdigest()
-    collection = get_collection()
+    pages = []
+    for page_number, page in enumerate(reader.pages, start=1):
+        text = page.extract_text() or ""
+        if text.strip():
+            pages.append(
+                {
+                    "text": text,
+                    "page": page_number,
+                }
+            )
 
-    # Do not add the same PDF twice.
-    existing_document = collection.get(
-        where={"document_id": document_id}
+    return pages
+
+
+def extract_text_from_txt(uploaded_file):
+    """Extract text from a TXT file."""
+    text = uploaded_file.read().decode("utf-8", errors="ignore")
+
+    return [
+        {
+            "text": text,
+            "page": 1,
+        }
+    ]
+
+
+def extract_text_from_docx(uploaded_file):
+    """Extract text from a DOCX file."""
+    document = Document(uploaded_file)
+
+    text = "\n".join(
+        paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()
     )
 
-    if existing_document["ids"]:
-        return 0, "This PDF was already added."
+    return [
+        {
+            "text": text,
+            "page": 1,
+        }
+    ]
 
-    reader = PdfReader(BytesIO(file_bytes))
+
+def extract_text_from_csv(uploaded_file):
+    """Extract text from a CSV file."""
+    dataframe = pd.read_csv(uploaded_file)
+    text = dataframe.to_string(index=False)
+
+    return [
+        {
+            "text": text,
+            "page": 1,
+        }
+    ]
+
+
+def extract_text_from_xlsx(uploaded_file):
+    """Extract text from an XLSX file."""
+    excel_file = pd.ExcelFile(uploaded_file)
+
+    sheets_text = []
+    for sheet_name in excel_file.sheet_names:
+        dataframe = pd.read_excel(uploaded_file, sheet_name=sheet_name)
+        sheet_text = dataframe.to_string(index=False)
+        sheets_text.append(f"Sheet: {sheet_name}\n{sheet_text}")
+
+    text = "\n\n".join(sheets_text)
+
+    return [
+        {
+            "text": text,
+            "page": 1,
+        }
+    ]
+
+
+def extract_text_from_document(uploaded_file):
+    """Extract text from supported document types."""
+    file_name = uploaded_file.name.lower()
+
+    if file_name.endswith(".pdf"):
+        return extract_text_from_pdf(uploaded_file)
+
+    if file_name.endswith(".txt"):
+        return extract_text_from_txt(uploaded_file)
+
+    if file_name.endswith(".docx"):
+        return extract_text_from_docx(uploaded_file)
+
+    if file_name.endswith(".csv"):
+        return extract_text_from_csv(uploaded_file)
+
+    if file_name.endswith(".xlsx"):
+        return extract_text_from_xlsx(uploaded_file)
+
+    if file_name.endswith(".doc"):
+        raise ValueError("Old .doc files are not supported. Please convert it to .docx.")
+
+    raise ValueError("Unsupported file type. Please upload PDF, TXT, DOCX, CSV, or XLSX.")
+
+def index_document(uploaded_file, api_key):
+    """Index an uploaded document into ChromaDB."""
+    file_bytes = uploaded_file.getvalue()
+    document_id = hashlib.md5(file_bytes).hexdigest()
+
+    collection = get_collection()
+
+    existing = collection.get(
+        where={"document_id": document_id},
+        include=["metadatas"],
+    )
+
+    if existing["ids"]:
+        return 0, "This document was already added."
+
+    pages = extract_text_from_document(uploaded_file)
 
     documents = []
     embeddings = []
     metadatas = []
     ids = []
 
-    for page_number, page in enumerate(reader.pages, start=1):
-        page_text = page.extract_text() or ""
+    for page_data in pages:
+        page_number = page_data["page"]
+        page_text = page_data["text"]
 
         for chunk_number, chunk in enumerate(split_text(page_text), start=1):
-            embedding_text = (
-                f"title: {uploaded_file.name} | text: {chunk}"
-            )
-
+            embedding_text = f"title: {uploaded_file.name} | text: {chunk}"
             embedding = create_embedding(embedding_text, api_key)
 
             documents.append(chunk)
@@ -96,7 +198,7 @@ def index_pdf(uploaded_file, api_key):
             ids.append(f"{document_id}-{page_number}-{chunk_number}")
 
     if not documents:
-        return 0, "No readable text was found in this PDF."
+        return 0, "No readable text was found in this document."
 
     collection.add(
         ids=ids,
@@ -105,8 +207,7 @@ def index_pdf(uploaded_file, api_key):
         metadatas=metadatas,
     )
 
-    return len(documents), "PDF added successfully."
-
+    return len(documents), "Document added successfully."
 
 def retrieve_context(question, api_key, number_of_results=4):
     """Find the document chunks most relevant to a question."""
