@@ -6,4 +6,3 @@ chromadb
 python-docx
 pandas
 openpyxl
-duckduckgo-search
