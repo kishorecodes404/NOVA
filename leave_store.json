@@ -1,0 +1,68 @@
+{
+  "balances": {
+    "me": {
+      "annual": 13,
+      "sick": 10,
+      "casual": 6
+    }
+  },
+  "requests": [
+    {
+      "id": "ec727879-70c2-413d-8b60-8b7a110acdc5",
+      "user": "me",
+      "leave_type": "annual",
+      "start": "2026-08-28",
+      "end": "2026-08-31",
+      "days": 2,
+      "reason": "",
+      "status": "approved",
+      "requested_at": "2026-08-21T12:18:49",
+      "approved_at": "2026-08-21T12:55:39"
+    },
+    {
+      "id": "e44e9ded-bc86-4d40-a69d-e643b4e90002",
+      "user": "me",
+      "leave_type": "annual",
+      "start": "2026-09-04",
+      "end": "2026-09-08",
+      "days": 3,
+      "reason": "",
+      "status": "approved",
+      "requested_at": "2026-08-21T12:46:34",
+      "approved_at": "2026-08-21T12:55:42"
+    },
+    {
+      "id": "bd6f4bed-64fd-4626-be59-79732b0b7267",
+      "user": "me",
+      "leave_type": "sick",
+      "start": "2026-08-25",
+      "end": "2026-08-25",
+      "days": 1,
+      "reason": "apply a sick leave on monday",
+      "status": "pending",
+      "requested_at": "2026-08-21T13:37:52"
+    },
+    {
+      "id": "612732e9-dfeb-4f16-8cc3-eaa5b53af8b4",
+      "user": "me",
+      "leave_type": "casual",
+      "start": "2026-08-27",
+      "end": "2026-08-27",
+      "days": 1,
+      "reason": "",
+      "status": "pending",
+      "requested_at": "2026-08-21T14:10:04"
+    },
+    {
+      "id": "27cea011-2b1f-490f-ad3a-e348173834b6",
+      "user": "me",
+      "leave_type": "sick",
+      "start": "2026-09-09",
+      "end": "2026-09-09",
+      "days": 1,
+      "reason": "I am feeling unwell and need to take time off.",
+      "status": "pending",
+      "requested_at": "2026-08-21T14:24:39"
+    }
+  ]
+}
