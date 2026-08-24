@@ -1,5 +1,8 @@
 import email
 import hashlib
+import html
+import hmac
+import secrets
 import imaplib
 import json
 import os
@@ -10,6 +13,7 @@ from email.header import decode_header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from urllib.parse import urlencode
 
 import chromadb
 import pandas as pd
@@ -1192,9 +1196,14 @@ def _split_addresses(value):
     return [addr.strip() for addr in value if str(addr).strip()]
 
 
-def send_mail(to, subject, body, cc=None, bcc=None):
+def send_mail(to, subject, body, cc=None, bcc=None, html_body=None):
     """
-    Sends a plain-text email over SMTP.
+    Sends an email over SMTP.
+
+    Existing callers can continue passing only a plain-text body.
+    When ``html_body`` is supplied, the message is multipart/alternative
+    so mail clients can render the clickable approval buttons while
+    retaining the plain-text fallback.
 
     Args:
         to: recipient address(es) - comma-separated string or list
@@ -1239,7 +1248,14 @@ def send_mail(to, subject, body, cc=None, bcc=None):
     # keeps it hidden from the To/Cc recipients.
 
     message["Subject"] = subject or "(no subject)"
-    message.attach(MIMEText(body or "", "plain"))
+
+    if html_body:
+        alternative = MIMEMultipart("alternative")
+        alternative.attach(MIMEText(body or "", "plain", "utf-8"))
+        alternative.attach(MIMEText(html_body, "html", "utf-8"))
+        message.attach(alternative)
+    else:
+        message.attach(MIMEText(body or "", "plain", "utf-8"))
 
     all_recipients = to_list + cc_list + bcc_list
 
@@ -2376,6 +2392,13 @@ def get_all_leave_requests():
     return requests
 
 
+def clear_leave_requests():
+    """Clear stored leave-request history while preserving leave balances."""
+    store = _load_leave_store()
+    store["requests"] = []
+    return _save_leave_store(store)
+
+
 def _find_leave_request(store, request_id):
     """Returns the request dict with this id, or None."""
 
@@ -2508,4 +2531,986 @@ def reject_leave_request(request_id, approver_note=""):
     return True, (
         f"Rejected {request['leave_type']} leave for {request['user']} "
         f"({request['start']} to {request['end']})."
+    )
+
+
+# ============================================================
+# PO AGENT
+#
+# Raises a Purchase Order with a full set of pre-submission
+# validations - field-level AND cross-system:
+#   - required fields (vendor, department, at least one line item)
+#   - line-item validity (positive quantity, non-negative price)
+#   - single-PO amount cap
+#   - requester eligibility (is this a recognized/authorized user)
+#   - vendor master (is this a recognized/approved vendor)
+#   - budget/spend limit (does this push the department over its
+#     configured cap, counting other pending+approved POs)
+#   - item/price catalog (does a line item's unit price look wildly
+#     off vs. a configured reference price)
+#   - duplicate submission (accidental double-submit protection)
+#
+# Storage is a single local JSON file (no external ERP/procurement
+# system) - configure via NOVA_PO_STORE_PATH. Swap this out for a
+# real procurement system's API later without touching app.py:
+# validate_po_request() and apply_po() just need to keep their same
+# signatures. Every cross-system check below is driven entirely by
+# env vars and is a no-op (skipped, not blocking) when its env var
+# isn't set - so the agent works "out of the box" with just
+# field-level validation, and gets stricter as each system is wired
+# up, one env var at a time.
+#
+#     NOVA_PO_STORE_PATH           path to a JSON file (default
+#                                   "po_store.json")
+#     NOVA_PO_ELIGIBLE_USERS       comma-separated list of user
+#                                   names allowed to raise POs. If
+#                                   unset, everyone is eligible
+#                                   (permissive default).
+#     NOVA_PO_MAX_AMOUNT           largest total a single PO can
+#                                   have, regardless of budget (a
+#                                   hard ceiling - e.g. "50000"). If
+#                                   unset, no cap.
+#     NOVA_PO_APPROVER_EMAIL       where internal PO-approval-request
+#                                   notifications are sent (optional -
+#                                   the PO itself always goes to the
+#                                   vendor regardless of this).
+#     NOVA_PO_DEFAULT_VENDOR_EMAIL fallback address the PO email is
+#                                   sent to when no vendor email was
+#                                   given/extracted (default
+#                                   "mskishore.studies@gmail.com").
+#     NOVA_PO_USER_NAME            display name shown in the
+#                                   PO-approval email in place of the
+#                                   internal "me" user key (default:
+#                                   "Team Member").
+#     NOVA_PO_AUTO_APPROVE_THRESHOLD
+#                                   total amount at/under which a PO
+#                                   is auto-approved instead of going
+#                                   to the approver (e.g. "500" for
+#                                   low-value orders). If unset (or
+#                                   0), every PO needs approval.
+#     NOVA_PO_VENDOR_MASTER        comma-separated list of approved
+#                                   vendor names. If unset, any
+#                                   vendor name is accepted.
+#     NOVA_PO_BUDGET_LIMITS        comma-separated "department:amount"
+#                                   pairs, e.g.
+#                                   "engineering:20000,marketing:8000".
+#                                   If a department has no entry here,
+#                                   its spend is unlimited.
+#     NOVA_PO_ITEM_CATALOG         comma-separated "item:unit_price"
+#                                   reference prices, e.g.
+#                                   "laptop:1200,chair:150". Items not
+#                                   listed aren't price-checked.
+#     NOVA_PO_PRICE_VARIANCE_PCT   how far a line item's unit price
+#                                   may deviate from its catalog
+#                                   reference price before a warning
+#                                   is raised (default 20, meaning
+#                                   +/-20%).
+# ============================================================
+
+PO_STORE_PATH = os.environ.get("NOVA_PO_STORE_PATH", "po_store.json")
+
+PO_MAX_AMOUNT = None
+_po_max_amount_raw = os.environ.get("NOVA_PO_MAX_AMOUNT", "").strip()
+if _po_max_amount_raw:
+    try:
+        PO_MAX_AMOUNT = float(_po_max_amount_raw)
+    except ValueError:
+        PO_MAX_AMOUNT = None
+
+# The approver receives the PO-approval email. For local/demo use,
+# fall back to the configured SMTP sender so the workflow works even
+# when a separate approver address hasn't been configured.
+PO_APPROVER_EMAIL = (
+    os.environ.get("NOVA_PO_APPROVER_EMAIL", "").strip()
+    or SMTP_USER.strip()
+)
+
+PO_APPROVAL_BASE_URL = (
+    os.environ.get("NOVA_PO_APPROVAL_BASE_URL", "http://localhost:8501").strip()
+    .rstrip("/")
+)
+
+PO_APPROVAL_SECRET = os.environ.get(
+    "NOVA_PO_APPROVAL_SECRET",
+    "NOVA-local-PO-approval-secret-change-this",
+).strip() or "NOVA-local-PO-approval-secret-change-this"
+
+
+# Fallback recipient for the actual purchase-order email when the
+# request doesn't name (or the extractor couldn't find) a specific
+# vendor/seller email address.
+PO_DEFAULT_VENDOR_EMAIL = os.environ.get(
+    "NOVA_PO_DEFAULT_VENDOR_EMAIL", "mskishore.studies@gmail.com"
+)
+
+PO_USER_DISPLAY_NAME = os.environ.get("NOVA_PO_USER_NAME", "").strip()
+
+PO_AUTO_APPROVE_THRESHOLD = 0.0
+_po_threshold_raw = os.environ.get("NOVA_PO_AUTO_APPROVE_THRESHOLD", "").strip()
+if _po_threshold_raw:
+    try:
+        PO_AUTO_APPROVE_THRESHOLD = float(_po_threshold_raw)
+    except ValueError:
+        PO_AUTO_APPROVE_THRESHOLD = 0.0
+
+PO_PRICE_VARIANCE_PCT = 20.0
+_po_variance_raw = os.environ.get("NOVA_PO_PRICE_VARIANCE_PCT", "").strip()
+if _po_variance_raw:
+    try:
+        PO_PRICE_VARIANCE_PCT = float(_po_variance_raw)
+    except ValueError:
+        PO_PRICE_VARIANCE_PCT = 20.0
+
+
+def _parse_po_budget_limits():
+    """Builds a {department_lower: limit_float} dict from NOVA_PO_BUDGET_LIMITS."""
+
+    limits = {}
+
+    for part in os.environ.get("NOVA_PO_BUDGET_LIMITS", "").split(","):
+        part = part.strip()
+
+        if not part or ":" not in part:
+            continue
+
+        department, _, amount_str = part.partition(":")
+        department = department.strip().lower()
+
+        try:
+            limits[department] = float(amount_str.strip())
+        except ValueError:
+            continue
+
+    return limits
+
+
+PO_BUDGET_LIMITS = _parse_po_budget_limits()
+
+
+def _parse_po_item_catalog():
+    """Builds an {item_name_lower: reference_price_float} dict from NOVA_PO_ITEM_CATALOG."""
+
+    catalog = {}
+
+    for part in os.environ.get("NOVA_PO_ITEM_CATALOG", "").split(","):
+        part = part.strip()
+
+        if not part or ":" not in part:
+            continue
+
+        item_name, _, price_str = part.partition(":")
+        item_name = item_name.strip().lower()
+
+        try:
+            catalog[item_name] = float(price_str.strip())
+        except ValueError:
+            continue
+
+    return catalog
+
+
+PO_ITEM_CATALOG = _parse_po_item_catalog()
+
+
+def _load_po_store():
+    """
+    Loads the JSON PO store, or an empty-but-valid shape if the file
+    doesn't exist yet or can't be read.
+    """
+
+    if not os.path.exists(PO_STORE_PATH):
+        return {"requests": []}
+
+    try:
+        with open(PO_STORE_PATH, "r", encoding="utf-8") as store_file:
+            data = json.load(store_file)
+    except Exception as error:
+        print(f"[PO] Couldn't read store at {PO_STORE_PATH}: {error}", flush=True)
+        return {"requests": []}
+
+    data.setdefault("requests", [])
+    return data
+
+
+def _save_po_store(store):
+    """Writes the PO store back to disk. Returns True on success."""
+
+    try:
+        with open(PO_STORE_PATH, "w", encoding="utf-8") as store_file:
+            json.dump(store, store_file, indent=2, default=str)
+        return True
+    except Exception as error:
+        print(f"[PO] Couldn't write store at {PO_STORE_PATH}: {error}", flush=True)
+        return False
+
+
+def _po_user_key(user):
+    """
+    Normalizes a user name/email to the key used in the PO store.
+    Same convention as _leave_user_key() - reuses
+    resolve_calendar_user() so names configured as calendar users
+    line up, falling back to the lowercased literal name otherwise.
+    """
+
+    return (resolve_calendar_user(user) or (user or "")).strip().lower()
+
+
+def get_po_eligible_users():
+    """
+    Set of lowercased user names allowed to raise POs, or None if
+    NOVA_PO_ELIGIBLE_USERS isn't configured (no restriction).
+    """
+
+    raw = os.environ.get("NOVA_PO_ELIGIBLE_USERS", "")
+
+    if not raw.strip():
+        return None
+
+    return {name.strip().lower() for name in raw.split(",") if name.strip()}
+
+
+def is_po_eligible(user):
+    """True if `user` is allowed to raise a PO."""
+
+    eligible = get_po_eligible_users()
+
+    if eligible is None:
+        return True
+
+    return _po_user_key(user) in eligible
+
+
+def _normalize_po_items(items):
+    """
+    Cleans a raw list of item dicts (name/quantity/unit_price) into
+    a validated list, computing each line's total. Returns
+    (normalized_items, item_errors) - item_errors describes any
+    individual line that couldn't be used (missing name, non-positive
+    quantity, negative price).
+    """
+
+    normalized = []
+    item_errors = []
+
+    for index, raw_item in enumerate(items or [], start=1):
+        name = str((raw_item or {}).get("name", "")).strip()
+
+        try:
+            quantity = float((raw_item or {}).get("quantity", 0))
+        except (TypeError, ValueError):
+            quantity = 0
+
+        try:
+            unit_price = float((raw_item or {}).get("unit_price", 0))
+        except (TypeError, ValueError):
+            unit_price = -1
+
+        if not name:
+            item_errors.append(f"Line {index}: missing an item name.")
+            continue
+
+        if quantity <= 0:
+            item_errors.append(f"Line {index} ({name}): quantity must be greater than 0.")
+            continue
+
+        if unit_price < 0:
+            item_errors.append(f"Line {index} ({name}): unit price can't be negative.")
+            continue
+
+        normalized.append({
+            "name": name,
+            "quantity": quantity,
+            "unit_price": unit_price,
+            "line_total": round(quantity * unit_price, 2),
+        })
+
+    return normalized, item_errors
+
+
+def get_po_history(user, include_cancelled=False):
+    """All recorded PO requests raised by `user`, most recent first."""
+
+    store = _load_po_store()
+    user_key = _po_user_key(user)
+
+    history = [
+        request
+        for request in store.get("requests", [])
+        if request.get("requester") == user_key
+        and (include_cancelled or request.get("status") != "cancelled")
+    ]
+
+    history.sort(key=lambda r: r.get("requested_at", ""), reverse=True)
+    return history
+
+
+def get_department_po_spend(department, include_pending=True):
+    """
+    Sum of total_amount across every non-rejected, non-cancelled PO
+    for `department` - i.e. money already committed or awaiting
+    approval. Used by the budget cross-check in validate_po_request()
+    and safe to call on its own for a spend summary.
+    """
+
+    store = _load_po_store()
+    department_key = (department or "").strip().lower()
+
+    statuses = {"approved", "auto_approved"}
+    if include_pending:
+        statuses.add("pending")
+
+    return round(sum(
+        request.get("total_amount", 0)
+        for request in store.get("requests", [])
+        if (request.get("department") or "").strip().lower() == department_key
+        and request.get("status") in statuses
+    ), 2)
+
+
+def check_duplicate_po(user, vendor, total_amount, window_hours=24):
+    """
+    Finds any existing PENDING PO from `user` for the same vendor and
+    the same total amount, raised within the last `window_hours` -
+    an accidental double-submit (e.g. a form submitted twice), not a
+    legitimate reorder pattern. Returns the list of matching request
+    records.
+    """
+
+    cutoff = datetime.now() - timedelta(hours=window_hours)
+    vendor_key = (vendor or "").strip().lower()
+    matches = []
+
+    for request in get_po_history(user):
+        if request.get("status") != "pending":
+            continue
+        if (request.get("vendor") or "").strip().lower() != vendor_key:
+            continue
+        if round(request.get("total_amount", -1), 2) != round(total_amount, 2):
+            continue
+
+        try:
+            requested_at = datetime.fromisoformat(request["requested_at"])
+        except Exception:
+            continue
+
+        if requested_at >= cutoff:
+            matches.append(request)
+
+    return matches
+
+
+def validate_po_request(user, vendor, department, items, justification=""):
+    """
+    Runs every pre-submission validation for a PO without writing
+    anything - safe to call just to preview/confirm.
+
+    Args:
+        user: name/email of the person raising the PO.
+        vendor: vendor/supplier name.
+        department: cost-center/department the spend is charged to.
+        items: list of {"name", "quantity", "unit_price"} dicts.
+        justification: optional free-text business reason.
+
+    Returns:
+        ok: True only if there are no blocking errors.
+        errors: list of blocking problems - submission should be
+            refused while any of these are present.
+        warnings: list of non-blocking notes worth surfacing before
+            the user confirms (e.g. an off-catalog price).
+        info: dict of computed details (items, total_amount,
+            department_spend_before, duplicates, ...) useful for a
+            confirmation card or receipt.
+    """
+
+    errors = []
+    warnings = []
+    info = {"vendor": vendor, "department": department, "justification": justification}
+
+    vendor = (vendor or "").strip()
+    department = (department or "").strip() or "general"
+
+    if not vendor:
+        errors.append("A vendor name is required.")
+
+    normalized_items, item_errors = _normalize_po_items(items)
+    info["items"] = normalized_items
+    errors.extend(item_errors)
+
+    if not normalized_items:
+        errors.append("At least one valid line item (name, quantity, unit price) is required.")
+
+    total_amount = round(sum(item["line_total"] for item in normalized_items), 2)
+    info["total_amount"] = total_amount
+
+    if normalized_items and total_amount <= 0:
+        errors.append("The PO total must be greater than zero.")
+
+    # ---- eligibility ----
+    if not is_po_eligible(user):
+        errors.append(f"{user} isn't on the configured list of PO-eligible users.")
+
+    # ---- single-PO amount cap ----
+    if PO_MAX_AMOUNT is not None and total_amount > PO_MAX_AMOUNT:
+        errors.append(
+            f"This PO's total (₹{total_amount:,.2f}) exceeds the maximum "
+            f"allowed for a single PO (₹{PO_MAX_AMOUNT:,.2f})."
+        )
+
+    # ---- vendor master (cross-system) ----
+    vendor_master_raw = os.environ.get("NOVA_PO_VENDOR_MASTER", "")
+    if vendor_master_raw.strip():
+        approved_vendors = {
+            v.strip().lower() for v in vendor_master_raw.split(",") if v.strip()
+        }
+        info["vendor_master_checked"] = True
+        if vendor.lower() not in approved_vendors:
+            errors.append(
+                f"'{vendor}' isn't on the approved vendor master list."
+            )
+    else:
+        info["vendor_master_checked"] = False
+
+    # ---- budget/spend limit (cross-system) ----
+    department_limit = PO_BUDGET_LIMITS.get(department.lower())
+    department_spend_before = get_department_po_spend(department)
+    info["department_spend_before"] = department_spend_before
+    info["department_limit"] = department_limit
+
+    if department_limit is not None:
+        projected = department_spend_before + total_amount
+        info["department_spend_after"] = round(projected, 2)
+        if projected > department_limit:
+            errors.append(
+                f"This PO would push {department}'s committed spend to "
+                f"₹{projected:,.2f}, over its ₹{department_limit:,.2f} "
+                "budget limit "
+                f"(₹{department_spend_before:,.2f} already "
+                "pending/approved)."
+            )
+
+    # ---- item/price catalog (cross-system, warning only) ----
+    catalog_flags = []
+    if PO_ITEM_CATALOG:
+        for item in normalized_items:
+            reference_price = PO_ITEM_CATALOG.get(item["name"].strip().lower())
+            if reference_price is None or reference_price <= 0:
+                continue
+
+            deviation_pct = abs(item["unit_price"] - reference_price) / reference_price * 100
+            if deviation_pct > PO_PRICE_VARIANCE_PCT:
+                catalog_flags.append(
+                    f"{item['name']}: quoted at ₹{item['unit_price']:,.2f}/unit vs. "
+                    f"catalog reference ₹{reference_price:,.2f}/unit "
+                    f"({deviation_pct:.0f}% off)."
+                )
+    info["catalog_flags"] = catalog_flags
+    if catalog_flags:
+        warnings.append(
+            "Some line items deviate significantly from the item/price "
+            "catalog: " + " ".join(catalog_flags)
+        )
+
+    # ---- duplicate submission ----
+    duplicates = check_duplicate_po(user, vendor, total_amount) if vendor and total_amount else []
+    info["duplicates"] = duplicates
+    if duplicates:
+        errors.append(
+            f"A pending PO for the same vendor ({vendor}) and the same "
+            f"total (₹{total_amount:,.2f}) was already submitted "
+            "recently - possible duplicate submission."
+        )
+
+    ok = not errors
+    return ok, errors, warnings, info
+
+
+def _format_po_vendor_email(user_key, request_record):
+    """
+    Builds the subject/body for the actual purchase-order email sent
+    directly to the vendor/seller, requesting them to fulfill the
+    order - distinct from _format_po_request_email(), which is an
+    internal sign-off request to the PO approver.
+    """
+
+    if user_key == "me":
+        display_name = PO_USER_DISPLAY_NAME or "Team Member"
+    else:
+        display_name = PO_USER_DISPLAY_NAME or user_key.title()
+
+    subject = (
+        f"Purchase Order - {request_record['vendor']} "
+        f"(₹{request_record['total_amount']:,.2f})"
+    )
+
+    lines = [
+        f"Hello {request_record['vendor']},",
+        "",
+        f"Please find below a purchase order from {display_name}:",
+        "",
+        "Items:",
+    ]
+
+    for item in request_record.get("items", []):
+        lines.append(
+            f"  - {item['name']}: {item['quantity']} x "
+            f"₹{item['unit_price']:,.2f} = ₹{item['line_total']:,.2f}"
+        )
+
+    lines.append("")
+    lines.append(f"Total: ₹{request_record['total_amount']:,.2f}")
+    if request_record.get("justification"):
+        lines.append(f"Notes: {request_record['justification']}")
+
+    lines.append("")
+    lines.append(f"Please confirm receipt of this order (Request ID: {request_record['id']}).")
+    lines.append("")
+    lines.append(f"Thank you,\n{display_name}")
+
+    return subject, "\n".join(lines)
+
+
+def _format_po_request_email(user_key, request_record, warnings):
+    """
+    Builds the subject/body for the PO-approval email sent to the
+    approver.
+    """
+
+    if user_key == "me":
+        display_name = PO_USER_DISPLAY_NAME or "Team Member"
+    else:
+        display_name = PO_USER_DISPLAY_NAME or user_key.title()
+
+    subject = (
+        f"PO request - {display_name} - {request_record['vendor']} "
+        f"(₹{request_record['total_amount']:,.2f})"
+    )
+
+    lines = [
+        f"{display_name} has raised a purchase order:",
+        "",
+        f"Vendor: {request_record['vendor']}",
+        f"Vendor email: {request_record.get('vendor_email') or '(not provided)'}",
+        f"Department: {request_record['department']}",
+        "",
+        "Items:",
+    ]
+
+    for item in request_record.get("items", []):
+        lines.append(
+            f"  - {item['name']}: {item['quantity']} x "
+            f"₹{item['unit_price']:,.2f} = ₹{item['line_total']:,.2f}"
+        )
+
+    lines.append("")
+    lines.append(f"Total: ₹{request_record['total_amount']:,.2f}")
+    lines.append(
+        f"Justification: {request_record.get('justification') or '(none provided)'}"
+    )
+
+    if warnings:
+        lines.append("")
+        lines.append("Notes:")
+        lines.extend(f"- {warning}" for warning in warnings)
+
+    lines.append("")
+    lines.append(
+        f"Request ID: {request_record['id']} (status: {request_record['status']})"
+    )
+
+    return subject, "\n".join(lines)
+
+
+
+def _po_approval_token(request_id, action):
+    """Create a signed token for one approval action and one PO."""
+    payload = f"{request_id}:{action}".encode("utf-8")
+    return hmac.new(
+        PO_APPROVAL_SECRET.encode("utf-8"),
+        payload,
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _po_approval_url(request_id, action):
+    """Build the URL used by the email's Approve/Reject button."""
+    query = urlencode(
+        {
+            "po_action": action,
+            "po_id": request_id,
+            "po_token": _po_approval_token(request_id, action),
+        }
+    )
+    return f"{PO_APPROVAL_BASE_URL}/?{query}"
+
+
+def verify_po_approval_token(request_id, action, token):
+    """Verify that an approval link belongs to this PO/action."""
+    if not request_id or action not in {"approve", "reject"} or not token:
+        return False
+    expected = _po_approval_token(request_id, action)
+    return hmac.compare_digest(str(token), expected)
+
+
+def _format_po_approval_email(user_key, request_record, warnings):
+    """Build the approval email with real clickable Approve/Reject buttons."""
+    display_name = PO_USER_DISPLAY_NAME or (
+        "Team Member" if user_key == "me" else user_key.title()
+    )
+
+    vendor = request_record.get("vendor", "Unknown vendor")
+    total = request_record.get("total_amount", 0)
+    request_id = request_record.get("id", "")
+
+    approve_url = _po_approval_url(request_id, "approve")
+    reject_url = _po_approval_url(request_id, "reject")
+
+    subject = f"PO Approval Required - {vendor} (₹{total:,.2f})"
+
+    text_lines = [
+        f"{display_name} has submitted a purchase order that requires your approval.",
+        "",
+        f"Vendor: {vendor}",
+        f"Vendor email: {request_record.get('vendor_email') or '(not provided)'}",
+        f"Department: {request_record.get('department', 'general')}",
+        "",
+        "Items:",
+    ]
+
+    for item in request_record.get("items", []):
+        text_lines.append(
+            f"  - {item.get('name', '')}: {item.get('quantity', 0)} x "
+            f"₹{item.get('unit_price', 0):,.2f} = ₹{item.get('line_total', 0):,.2f}"
+        )
+
+    text_lines += [
+        "",
+        f"Total: ₹{total:,.2f}",
+        f"Justification: {request_record.get('justification') or '(none provided)'}",
+        "",
+        "Approve:",
+        approve_url,
+        "",
+        "Reject:",
+        reject_url,
+        "",
+        f"Request ID: {request_id}",
+    ]
+
+    if warnings:
+        text_lines += ["", "Notes:"] + [f"- {warning}" for warning in warnings]
+
+    esc = html.escape
+    item_rows = "".join(
+        f"""
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">{esc(str(item.get('name', '')))}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">{esc(str(item.get('quantity', 0)))}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">₹{item.get('unit_price', 0):,.2f}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">₹{item.get('line_total', 0):,.2f}</td>
+        </tr>
+        """
+        for item in request_record.get("items", [])
+    )
+
+    html_body = f"""
+    <!doctype html>
+    <html>
+      <body style="font-family:Arial,Helvetica,sans-serif;color:#202124;line-height:1.5;">
+        <div style="max-width:680px;margin:0 auto;padding:24px;">
+          <h2 style="margin-bottom:6px;">Purchase Order Approval Required</h2>
+          <p><strong>{esc(display_name)}</strong> has submitted a purchase order that requires your approval.</p>
+
+          <table style="border-collapse:collapse;width:100%;margin:18px 0;">
+            <tr><td style="padding:6px 0;"><strong>Vendor</strong></td><td>{esc(vendor)}</td></tr>
+            <tr><td style="padding:6px 0;"><strong>Vendor email</strong></td><td>{esc(request_record.get('vendor_email') or '(not provided)')}</td></tr>
+            <tr><td style="padding:6px 0;"><strong>Department</strong></td><td>{esc(request_record.get('department', 'general'))}</td></tr>
+            <tr><td style="padding:6px 0;"><strong>Total</strong></td><td><strong>₹{total:,.2f}</strong></td></tr>
+          </table>
+
+          <h3>Items</h3>
+          <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="padding:8px;text-align:left;">Item</th>
+                <th style="padding:8px;">Qty</th>
+                <th style="padding:8px;text-align:right;">Unit Price</th>
+                <th style="padding:8px;text-align:right;">Line Total</th>
+              </tr>
+            </thead>
+            <tbody>{item_rows}</tbody>
+          </table>
+
+          <p><strong>Justification:</strong> {esc(request_record.get('justification') or '(none provided)')}</p>
+
+          <div style="margin:28px 0;">
+            <a href="{esc(approve_url)}"
+               style="display:inline-block;background:#16a34a;color:white;text-decoration:none;padding:13px 22px;border-radius:7px;font-weight:bold;margin-right:10px;">
+              ✓ APPROVE PO
+            </a>
+            <a href="{esc(reject_url)}"
+               style="display:inline-block;background:#dc2626;color:white;text-decoration:none;padding:13px 22px;border-radius:7px;font-weight:bold;">
+              ✕ REJECT PO
+            </a>
+          </div>
+
+          <p style="font-size:13px;color:#6b7280;">Request ID: {esc(request_id)}</p>
+        </div>
+      </body>
+    </html>
+    """
+
+    return subject, "\n".join(text_lines), html_body
+
+
+def apply_po(user, vendor, department, items, justification="", force=False, vendor_email=""):
+    """
+    Validate and submit a purchase order for approval.
+
+    This function deliberately does NOT email the vendor. A submitted
+    PO is stored as ``pending`` (unless the configured auto-approval
+    threshold explicitly applies). The vendor email is sent only by
+    ``approve_po_request()`` after an explicit approval.
+    """
+    ok, errors, warnings, info = validate_po_request(
+        user, vendor, department, items, justification
+    )
+
+    if not ok and not force:
+        return (
+            False,
+            "PO couldn't be submitted: " + " ".join(errors),
+            {"errors": errors, "warnings": warnings, "info": info},
+        )
+
+    store = _load_po_store()
+    user_key = _po_user_key(user)
+    normalized_items = info["items"]
+    total_amount = info["total_amount"]
+    department_clean = (department or "").strip() or "general"
+    vendor_email_clean = (vendor_email or "").strip() or PO_DEFAULT_VENDOR_EMAIL
+
+    auto_approve = (
+        PO_AUTO_APPROVE_THRESHOLD > 0
+        and total_amount <= PO_AUTO_APPROVE_THRESHOLD
+    )
+
+    now = datetime.now().isoformat(timespec="seconds")
+    request_record = {
+        "id": str(uuid.uuid4()),
+        "requester": user_key,
+        "vendor": (vendor or "").strip(),
+        "vendor_email": vendor_email_clean,
+        "department": department_clean,
+        "items": normalized_items,
+        "total_amount": total_amount,
+        "justification": justification,
+        "status": "auto_approved" if auto_approve else "pending",
+        "requested_at": now,
+        "vendor_notified": False,
+        "email_status": "pending_approval",
+    }
+
+    if auto_approve:
+        request_record["approved_at"] = now
+
+    store["requests"].append(request_record)
+
+    if not _save_po_store(store):
+        return (
+            False,
+            "Couldn't save the PO - please try again.",
+            {"errors": errors, "warnings": warnings, "info": info},
+        )
+
+    base = (
+        f"PO for {request_record['vendor']} (₹{total_amount:,.2f}, "
+        f"{department_clean}) from {user_key}"
+    )
+
+    # Low-value POs may be explicitly configured for automatic approval.
+    # In the normal/default configuration the PO remains pending.
+    if auto_approve:
+        approved, approval_message = approve_po_request(request_record["id"], "Auto-approved by configured threshold.")
+        if approved:
+            message = f"{base} was auto-approved and sent to {vendor_email_clean}."
+        else:
+            message = f"{base} was auto-approved, but vendor email could not be completed: {approval_message}"
+    else:
+        # The approval happens from the email itself. The vendor is NOT
+        # emailed here. The approval email contains signed Approve/Reject
+        # links that return to NOVA and can be clicked from Gmail/Outlook.
+        subject, body, html_body = _format_po_approval_email(
+            user_key, request_record, warnings
+        )
+        approver_notified, approver_mail_message = send_mail(
+            to=PO_APPROVER_EMAIL,
+            subject=subject,
+            body=body,
+            html_body=html_body,
+        )
+
+        message = f"{base} was submitted for approval."
+        if approver_notified:
+            message += f" Approval email sent to {PO_APPROVER_EMAIL}."
+        else:
+            reason = approver_mail_message or "approval email could not be sent."
+            message += f" Approval email failed: {reason}"
+
+    if warnings:
+        message += " Note: " + " ".join(warnings)
+
+    return (
+        True,
+        message,
+        {
+            "errors": errors,
+            "warnings": warnings,
+            "info": info,
+            "record": request_record,
+            "vendor_notified": request_record.get("vendor_notified", False),
+            "approver_notified": bool(approver_notified) if not auto_approve else False,
+        },
+    )
+
+
+def get_sent_po_requests():
+    """Return only POs whose vendor email was actually sent successfully."""
+    store = _load_po_store()
+    sent = [
+        request
+        for request in store.get("requests", [])
+        if request.get("vendor_notified") is True
+        and request.get("email_status") == "sent"
+    ]
+    sent.sort(key=lambda r: r.get("sent_at", r.get("requested_at", "")), reverse=True)
+    return sent
+
+
+def clear_po_requests():
+    """Clear all stored PO history."""
+    return _save_po_store({"requests": []})
+
+
+def get_pending_po_requests():
+    """
+    All PO requests currently awaiting approval, across every user,
+    oldest first - what an approver needs to work through.
+    """
+
+    store = _load_po_store()
+
+    pending = [
+        request
+        for request in store.get("requests", [])
+        if request.get("status") == "pending"
+    ]
+
+    pending.sort(key=lambda r: r.get("requested_at", ""))
+    return pending
+
+
+def get_all_po_requests():
+    """
+    Every PO request ever submitted, across every user and every
+    status (pending/approved/auto_approved/rejected), most recently
+    requested first. Used by the sidebar's read-only PO status list -
+    requests don't disappear once resolved, they just show a
+    different status.
+    """
+
+    store = _load_po_store()
+
+    requests = list(store.get("requests", []))
+    requests.sort(key=lambda r: r.get("requested_at", ""), reverse=True)
+    return requests
+
+
+def _find_po_request(store, request_id):
+    """Returns the PO request dict with this id, or None."""
+
+    for request in store.get("requests", []):
+        if request.get("id") == request_id:
+            return request
+    return None
+
+
+def approve_po_request(request_id, approver_note=""):
+    """Approve a pending PO and only then send the PO to the vendor."""
+    store = _load_po_store()
+    request = _find_po_request(store, request_id)
+
+    if request is None:
+        return False, "That PO request no longer exists."
+    if request.get("status") != "pending":
+        return False, f"That request is already {request.get('status')}."
+
+    request["status"] = "approved"
+    request["approved_at"] = datetime.now().isoformat(timespec="seconds")
+    request["email_status"] = "sending"
+    if approver_note:
+        request["approver_note"] = approver_note
+
+    if not _save_po_store(store):
+        return False, "Couldn't save the approval - please try again."
+
+    vendor_email = (request.get("vendor_email") or "").strip() or PO_DEFAULT_VENDOR_EMAIL
+    subject, body = _format_po_vendor_email(request.get("requester", "me"), request)
+    sent, mail_message = send_mail(
+        to=vendor_email,
+        subject=subject,
+        body=body,
+    )
+
+    # Reload so we don't accidentally overwrite a concurrent store update.
+    store = _load_po_store()
+    request = _find_po_request(store, request_id)
+    if request is None:
+        return False, "PO was approved, but its record could no longer be found."
+
+    if sent:
+        request["vendor_notified"] = True
+        request["email_status"] = "sent"
+        request["sent_at"] = datetime.now().isoformat(timespec="seconds")
+        save_ok = _save_po_store(store)
+        if not save_ok:
+            return False, "PO was approved and emailed, but the final status couldn't be saved."
+        return True, (
+            f"Approved PO for {request.get('requester', 'me')} "
+            f"({request.get('vendor', 'vendor')}, ₹{request.get('total_amount', 0):,.2f}) "
+            f"and sent it to {vendor_email}."
+        )
+
+    request["vendor_notified"] = False
+    request["email_status"] = "failed"
+    request["email_error"] = mail_message
+    _save_po_store(store)
+    return False, (
+        f"PO was approved, but it could not be emailed to {vendor_email}: {mail_message}"
+    )
+
+
+def reject_po_request(request_id, approver_note=""):
+    """Reject a pending PO. Rejected POs are never emailed to the vendor."""
+    store = _load_po_store()
+    request = _find_po_request(store, request_id)
+
+    if request is None:
+        return False, "That PO request no longer exists."
+    if request.get("status") != "pending":
+        return False, f"That request is already {request.get('status')}."
+
+    request["status"] = "rejected"
+    request["rejected_at"] = datetime.now().isoformat(timespec="seconds")
+    request["vendor_notified"] = False
+    request["email_status"] = "rejected"
+    if approver_note:
+        request["approver_note"] = approver_note
+
+    if not _save_po_store(store):
+        return False, "Couldn't save the rejection - please try again."
+
+    return True, (
+        f"Rejected PO for {request.get('requester', 'me')} "
+        f"({request.get('vendor', 'vendor')}, ₹{request.get('total_amount', 0):,.2f}). "
+        "The vendor was not emailed."
     )
