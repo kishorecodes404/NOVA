@@ -328,10 +328,6 @@ def apply_custom_styles():
         }
 
         [data-testid="stSidebar"] > div:first-child {
-            padding: 1.25rem 1rem !important;
-        }
-
-        [data-testid="stSidebar"] > div:first-child {
             padding: 1.5rem 1rem !important;
         }
 
@@ -3459,10 +3455,6 @@ def build_routed_prompt(question, conversation_history):
         wait=False
     )
 
-    st.session_state.last_route = route
-    st.session_state.last_sources = sources
-
-
     # =========================================================
     # BUILD PROMPT
     # =========================================================
@@ -3737,8 +3729,6 @@ Answer naturally and concisely.
 
 
 def stream_ollama_response(question):
-    import json
-
     request_start = time.perf_counter()
 
     conversation_history = build_local_history()
@@ -4039,21 +4029,6 @@ def render_sidebar(api_key):
         # ================================
         # LEAVE REQUEST STATUS
         #
-        # Read-only status list in the sidebar - always visible (NOT
-        # gated behind Admin Access, since the leave approver isn't
-        # necessarily the same person as the knowledge-base admin).
-        # There's no approve/reject action here: approval is handled
-        # elsewhere (e.g. by whoever owns approve_leave_request()/
-        # reject_leave_request() - a future admin flow, a script, a
-        # different surface). This list just reflects whatever that
-        # status currently is - a request shows "Pending" until it's
-        # acted on, then flips to "Approved"/"Rejected" and stays
-        # visible instead of disappearing off the list.
-        # ================================
-
-        # ================================
-        # LEAVE REQUEST STATUS
-        #
         # Collapsed into a single expander (one "dropdown" for the
         # whole list, not one per request) so the sidebar doesn't
         # grow a row per request by default - opening it reveals
@@ -4128,16 +4103,6 @@ def render_sidebar(api_key):
         # ================================
         # PURCHASE ORDER STATUS
         #
-        # Same read-only pattern as the Leave Requests list above:
-        # no approve/reject action here, just a status list that
-        # flips Pending -> Approved/Rejected (or shows
-        # "Auto-approved" for POs that cleared under
-        # NOVA_PO_AUTO_APPROVE_THRESHOLD without needing sign-off).
-        # ================================
-
-        # ================================
-        # PURCHASE ORDER STATUS
-        #
         # Same collapsed-expander pattern as the Leave Requests list
         # above: no approve/reject action here, just a status list
         # that flips Pending -> Approved/Rejected (or shows
@@ -4149,13 +4114,6 @@ def render_sidebar(api_key):
         # PO APPROVAL IS DONE FROM THE EMAIL. Only sent POs are shown in the sidebar.
 
         sent_po_requests = get_sent_po_requests()[:15]
-
-        PO_STATUS_STYLE = {
-            "pending": ("Pending", "#c98a2b"),
-            "approved": ("Approved", "#3fae5c"),
-            "auto_approved": ("Auto-approved", "#3fae5c"),
-            "rejected": ("Rejected", "#d1495b"),
-        }
 
         with st.expander(f"Sent Purchase Orders ({len(sent_po_requests)})"):
             if not sent_po_requests:
@@ -4424,7 +4382,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-        # ================================
+    # ================================
     # EMPTY STATE
     # ================================
 
