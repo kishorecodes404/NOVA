@@ -1,0 +1,28 @@
+{
+  "requests": [
+    {
+      "id": "82f04a68-1f27-466d-9557-fe3de131f7d8",
+      "requester": "me",
+      "vendor": "Reliance Digital",
+      "vendor_email": "mskishore.studies@gmail.com",
+      "department": "general",
+      "items": [
+        {
+          "name": "Laptop",
+          "quantity": 10.0,
+          "unit_price": 40000.0,
+          "line_total": 400000.0
+        }
+      ],
+      "total_amount": 400000.0,
+      "justification": "To purchase 10 laptops for the company's IT department.",
+      "status": "approved",
+      "requested_at": "2026-08-24T14:45:23",
+      "vendor_notified": true,
+      "email_status": "sent",
+      "approved_at": "2026-08-24T14:47:26",
+      "approver_note": "Approved from email.",
+      "sent_at": "2026-08-24T14:47:30"
+    }
+  ]
+}

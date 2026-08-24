@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 import streamlit as st
+import pandas as pd
 from google import genai
 from dotenv import load_dotenv
 
@@ -55,6 +56,15 @@ from rag import (
     get_leave_balances,
     get_leave_history,
     get_all_leave_requests,
+    clear_leave_requests,
+    validate_po_request,
+    apply_po,
+    get_po_history,
+    get_all_po_requests,
+    get_sent_po_requests,
+    approve_po_request,
+    reject_po_request,
+    clear_po_requests,
     EMBEDDING_MODEL,
     list_indexed_documents,
 )
@@ -204,6 +214,61 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ============================================================
+# EMAIL PO APPROVAL HANDLER
+#
+# Gmail/Outlook approval buttons open NOVA with query parameters.
+# No public API server is required: Streamlit handles the request
+# when the page loads. The signed token prevents someone from
+# approving/rejecting a different PO by changing the URL.
+# ============================================================
+
+def _handle_po_email_action():
+    try:
+        params = st.query_params
+        action = params.get("po_action", "")
+        request_id = params.get("po_id", "")
+        token = params.get("po_token", "")
+
+        if action not in {"approve", "reject"} or not request_id or not token:
+            return False
+
+        from rag import verify_po_approval_token
+
+        if not verify_po_approval_token(request_id, action, token):
+            st.error("This PO approval link is invalid or has been tampered with.")
+            return True
+
+        st.title("NOVA · Purchase Order Approval")
+
+        if action == "approve":
+            ok, message = approve_po_request(request_id, "Approved from email.")
+            if ok:
+                st.success(message)
+                st.info("The PO has been sent to the vendor.")
+            else:
+                st.error(message)
+        else:
+            ok, message = reject_po_request(request_id, "Rejected from email.")
+            if ok:
+                st.warning(message)
+                st.info("The vendor was not emailed.")
+            else:
+                st.error(message)
+
+        st.caption("You can close this tab. The approval action has been recorded in NOVA.")
+        return True
+    except Exception as error:
+        st.error(f"Could not process the PO approval action: {error}")
+        return True
+
+
+# Handle one-click PO approval/rejection links from email only after
+# Streamlit page configuration has been initialized (and after the
+# handler function above has actually been defined).
+if _handle_po_email_action():
+    st.stop()
 
 
 # ---------------------------------------------------
@@ -1467,6 +1532,19 @@ Examples of LEAVE_REQUEST requests:
 - How many sick leave days do I have left?
 - What's my leave balance?
 
+PO_REQUEST
+Use PO_REQUEST when the user wants NOVA to raise/create a Purchase
+Order, or asks about the status/history of a PO they raised - an
+imperative action or a question about their own PO(s), not a
+general question about purchasing in the abstract.
+
+Examples of PO_REQUEST requests:
+- Raise a PO for 50 laptops from Dell at $1200 each.
+- Create a purchase order for office chairs from IKEA, 10 units at $150.
+- Submit a PO to Acme Supplies for 200 units of widget-A at $12.50, marketing department.
+- What's the status of my last PO?
+- Show me my purchase order history.
+
 WEB
 Use WEB when the user needs a SPECIFIC, real-world fact that can
 change over time - a person's current role, a company, an event,
@@ -1511,7 +1589,9 @@ signal is imperative action verbs ("send", "email [someone]",
 "reply to", "schedule", "book", "add to my calendar") versus
 questions ("did I get", "what's on my calendar"). A request to
 apply for time off, or a question about the user's own leave
-balance/history, is LEAVE_REQUEST.
+balance/history, is LEAVE_REQUEST. A request to raise/create a
+Purchase Order, or a question about the user's own PO status/
+history, is PO_REQUEST.
 A short follow-up (e.g. "and her sister?", "what about in 2020?") inherits
 the category of the RECENT CONVERSATION below if it's asking to extend
 the same topic.
@@ -1526,6 +1606,7 @@ MEETINGS
 SEND_MAIL
 SCHEDULE_MEETING
 LEAVE_REQUEST
+PO_REQUEST
 WEB
 CHAT
 
@@ -1808,6 +1889,38 @@ def route_query(question, conversation_history=""):
         return "LEAVE_REQUEST"
 
     # =========================================================
+    # FAST PO-REQUEST ROUTING
+    #
+    # "PO" alone is too short/ambiguous to substring-match safely,
+    # so it's only matched as a whole word below; the phrase list
+    # covers the common spelled-out forms.
+    # =========================================================
+
+    po_signals = [
+        "purchase order", "purchase orders", "raise a po", "raise po",
+        "create a po", "create po", "submit a po", "submit po",
+        "po request", "po status", "my po", "my pos",
+    ]
+
+    if any(signal in q for signal in po_signals):
+        log_timing("route_query -> 'PO_REQUEST' (fast)")
+        return "PO_REQUEST"
+
+    if re.search(r"\bpo\b", q) and re.search(
+        r"\b(raise|create|submit|make|status|history|approve[d]?|pending)\b", q
+    ):
+        log_timing("route_query -> 'PO_REQUEST' (fast, bare 'po' + verb)")
+        return "PO_REQUEST"
+
+    if re.match(
+        r"^(please\s+)?(raise|create|submit|make|place)\b(?:\s+\S+){0,4}\s+"
+        r"(purchase order|po)\b",
+        q,
+    ):
+        log_timing("route_query -> 'PO_REQUEST' (fast, verb...po)")
+        return "PO_REQUEST"
+
+    # =========================================================
     # FAST MAIL ROUTING
     # =========================================================
 
@@ -2010,6 +2123,9 @@ def route_query(question, conversation_history=""):
 
     if "LEAVE" in label:
         return "LEAVE_REQUEST"
+
+    if "PO_REQUEST" in label or "PO REQUEST" in label:
+        return "PO_REQUEST"
 
     if "MAIL" in label:
         return "MAIL"
@@ -2524,6 +2640,185 @@ JSON:""".strip()
     }, None
 
 
+_CURRENCY_WORD = r"(?:rupees|rupee|rs\.?|inr|₹|dollars|dollar|usd|\$)"
+DEFAULT_VENDOR_EMAIL = os.environ.get(
+    "NOVA_PO_DEFAULT_VENDOR_EMAIL", "mskishore.studies@gmail.com"
+)
+_STATED_TOTAL_RE = re.compile(
+    r"(?:" + _CURRENCY_WORD + r")\s*(\d[\d,]*(?:\.\d+)?)\b"
+    r"(?!\s*(?:each|per|/|a piece|apiece))"
+    r"|(\d[\d,]*(?:\.\d+)?)\s*" + _CURRENCY_WORD + r"\b"
+    r"(?!\s*(?:each|per|/|a piece|apiece))"
+    # Bare "for <number>" with NO currency word at all, e.g. "...to
+    # reliance digital for 400000". Only counts as a total when the
+    # number isn't immediately followed by another word - that
+    # excludes cases like "for 10 laptops" (quantity, not total) and
+    # "for 50 each"/"...per unit" (already excluded by the other two
+    # alternatives' lookaheads, but "each"/"per" also start with a
+    # letter so this lookahead catches them too).
+    r"|\bfor\s+(\d[\d,]*(?:\.\d+)?)\b(?!\s*[a-zA-Z])",
+    re.IGNORECASE,
+)
+
+
+def _extract_stated_total(text):
+    """
+    Best-effort pull of a single currency amount the user typed
+    directly as a TOTAL (e.g. "for 30,000 rupees", "₹30000", "$150",
+    or a bare "...for 400000" with no currency word at all), used to
+    sanity-check the LLM-extracted PO total. Explicitly skips amounts
+    followed by "each"/"per"/etc, since those are per-unit prices,
+    not totals (e.g. "100 notebooks ... for 50 rupees each" is
+    unit_price=50, not total=50). Returns None if zero or more than
+    one distinct amount is found, since with several numbers in play
+    we can't safely guess which one is the total.
+    """
+    found = set()
+    for match in _STATED_TOTAL_RE.finditer(text):
+        raw = match.group(1) or match.group(2) or match.group(3)
+        try:
+            found.add(float(raw.replace(",", "")))
+        except ValueError:
+            continue
+    if len(found) == 1:
+        return found.pop()
+    return None
+
+
+def extract_po_fields(question):
+    """
+    Pulls structured PO fields (vendor/department/items/justification)
+    out of a natural-language PO_REQUEST request.
+
+    Returns:
+        (fields, error) - exactly one of these is set. `fields` has
+        the keys apply_po() expects (user/vendor/department/items/
+        justification), plus the validation results (ok/errors/
+        warnings/info) so the confirmation card can show them
+        without a second round-trip.
+    """
+
+    extraction_prompt = f"""
+Extract the fields needed to raise a Purchase Order from the request
+below. Reply with ONLY a JSON object, no other text, in exactly this
+shape:
+
+{{"vendor": "...", "vendor_email": "...", "department": "...", "items": [{{"name": "...", "quantity": 1, "unit_price": 0.0}}], "justification": "..."}}
+
+- "vendor": the supplier/vendor name.
+- "vendor_email": the vendor/seller's email address if the user
+  mentioned one, else "".
+- "department": the cost-center/department the spend is charged to,
+  or "" if not mentioned.
+- "items": one entry per distinct item mentioned, with "quantity" as
+  a plain number and "unit_price" as a plain number (no currency
+  symbols). If only a total was given for one item with no explicit
+  unit price, divide the total by the quantity to get the unit
+  price.
+- "justification": a short free-text business reason if the user
+  gave one, else "".
+
+REQUEST:
+{question}
+
+JSON:""".strip()
+
+    try:
+        raw = _call_extraction_model(extraction_prompt, num_predict=300)
+    except Exception as error:
+        log_timing(f"extract_po_fields FAILED: {error}")
+        return None, f"Couldn't reach the local model to read that request: {error}"
+
+    parsed = _parse_json_object(raw)
+
+    if not parsed:
+        return None, "I couldn't parse the details of that PO request."
+
+    vendor = str(parsed.get("vendor", "")).strip()
+
+    # SECURITY/CORRECTNESS: never trust an LLM-generated PO recipient.
+    # The recipient must come from an email address literally present in
+    # the user's original request. If none was typed, leave it blank and
+    # let the confirmation form use the configured fallback.
+    literal_emails = re.findall(
+        r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+",
+        question,
+    )
+    vendor_email = literal_emails[0].strip() if literal_emails else ""
+
+    department = str(parsed.get("department", "")).strip()
+    justification = str(parsed.get("justification", "")).strip()
+    raw_items = parsed.get("items", [])
+
+    if not isinstance(raw_items, list):
+        raw_items = []
+
+    items = []
+    for raw_item in raw_items:
+        if not isinstance(raw_item, dict):
+            continue
+        items.append({
+            "name": str(raw_item.get("name", "")).strip(),
+            "quantity": raw_item.get("quantity", 0),
+            "unit_price": raw_item.get("unit_price", 0),
+        })
+
+    if not vendor:
+        return None, "I couldn't tell which vendor that PO is for - could you name the vendor?"
+
+    if not items:
+        return None, "I couldn't tell what's being ordered - could you list the item(s), quantity, and unit price?"
+
+    # Sanity-check the extraction against any total the user actually
+    # stated in plain text (e.g. "for 30,000 rupees"). The extraction
+    # model is asked to derive unit_price = total / quantity when only
+    # a total is given, but it can still get that division wrong -
+    # this catches a single-item PO where the resulting line total
+    # doesn't match what the user said and corrects it instead of
+    # silently sending the wrong amount for approval.
+    correction_warning = None
+    stated_total = _extract_stated_total(question)
+    if stated_total is not None and len(items) == 1:
+        try:
+            quantity = float(items[0]["quantity"] or 0)
+        except (TypeError, ValueError):
+            quantity = 0
+        try:
+            computed_total = quantity * float(items[0]["unit_price"] or 0)
+        except (TypeError, ValueError):
+            computed_total = 0
+        if quantity > 0 and abs(computed_total - stated_total) > 0.01:
+            corrected_unit_price = round(stated_total / quantity, 2)
+            correction_warning = (
+                f"Unit price was recalculated to ₹{corrected_unit_price:,.2f} "
+                f"to match the ₹{stated_total:,.2f} total you mentioned."
+            )
+            items[0]["unit_price"] = corrected_unit_price
+
+    # "me" - the primary configured user, same single-tenant
+    # convention as extract_leave_fields()/schedule_meeting().
+    user = "me"
+
+    ok, errors, warnings, info = validate_po_request(
+        user, vendor, department, items, justification
+    )
+    if correction_warning:
+        warnings = [correction_warning] + list(warnings or [])
+
+    return {
+        "user": user,
+        "vendor": vendor,
+        "vendor_email": vendor_email or DEFAULT_VENDOR_EMAIL,
+        "department": department or "general",
+        "items": info["items"] or items,
+        "justification": justification,
+        "ok": ok,
+        "errors": errors,
+        "warnings": warnings,
+        "info": info,
+    }, None
+
+
 def _format_action_draft(action_route, fields):
     """
     Formats the confirmation-card text shown before a SEND_MAIL or
@@ -2588,6 +2883,63 @@ def _format_action_draft(action_route, fields):
             f"{error_block}{warning_block}"
         )
 
+    if action_route == "PO_REQUEST":
+
+        info = fields.get("info") or {}
+        items = fields.get("items") or []
+
+        items_lines = "\n".join(
+            f"- {item['name']}: {item['quantity']} x "
+            f"₹{item['unit_price']:,.2f} = ₹{item['line_total']:,.2f}"
+            for item in items
+        )
+
+        justification_line = (
+            f"  \n**Justification:** {fields['justification']}"
+            if fields.get("justification")
+            else ""
+        )
+
+        budget_line = ""
+        if info.get("department_limit") is not None:
+            budget_line = (
+                f"  \n**{fields['department'].title()} budget:** "
+                f"₹{info.get('department_spend_before', 0):,.2f} committed → "
+                f"₹{info.get('department_spend_after', 0):,.2f} after this PO "
+                f"(limit ₹{info['department_limit']:,.2f})"
+            )
+
+        error_block = (
+            "\n\n🚫 **This PO can't be submitted as-is:**\n"
+            + "\n".join(f"- {e}" for e in fields.get("errors") or [])
+            if fields.get("errors")
+            else ""
+        )
+        warning_block = (
+            "\n\n⚠️ **Note:**\n"
+            + "\n".join(f"- {w}" for w in fields.get("warnings") or [])
+            if fields.get("warnings")
+            else ""
+        )
+
+        intro = (
+            "Here's the PO — want me to send it to the vendor?"
+            if fields.get("ok")
+            else "Here's the PO, but it has problems that need fixing first:"
+        )
+
+        return (
+            f"{intro}\n\n"
+            f"**Vendor:** {fields['vendor']}  \n"
+            f"**Vendor email:** {fields.get('vendor_email', DEFAULT_VENDOR_EMAIL)}  \n"
+            f"**Department:** {fields['department']}\n\n"
+            f"{items_lines}\n\n"
+            f"**Total:** ₹{info.get('total_amount', 0):,.2f}"
+            f"{justification_line}"
+            f"{budget_line}"
+            f"{error_block}{warning_block}"
+        )
+
     start = fields["start"]
     end = fields["end"]
     loc_line = f"  \n**Location:** {fields['location']}" if fields.get("location") else ""
@@ -2645,6 +2997,10 @@ def _clear_action_edit_state():
         "edit_action_location", "edit_action_attendees",
         "edit_action_leave_type", "edit_action_leave_start",
         "edit_action_leave_end", "edit_action_leave_reason",
+        "edit_action_po_vendor", "edit_action_po_vendor_email",
+        "edit_action_po_department",
+        "edit_action_po_items_df", "edit_action_po_justification",
+        "po_items_editor",
     ):
         st.session_state.pop(key, None)
 
@@ -2712,6 +3068,57 @@ def _confirm_pending_action():
             except ValueError:
                 success, message = False, (
                     "Couldn't read that date - use YYYY-MM-DD."
+                )
+
+        elif action["kind"] == "PO_REQUEST":
+
+            vendor = st.session_state.get("edit_action_po_vendor", "").strip()
+            vendor_email = (
+                st.session_state.get("edit_action_po_vendor_email", "").strip()
+                or DEFAULT_VENDOR_EMAIL
+            )
+            department = st.session_state.get("edit_action_po_department", "").strip()
+            justification = st.session_state.get("edit_action_po_justification", "").strip()
+            items_df = st.session_state.get("edit_action_po_items_df")
+
+            items = []
+            parse_error = None
+
+            if items_df is None or items_df.empty:
+                parse_error = "Add at least one item (product name, quantity, unit price)."
+            else:
+                for row_number, row in enumerate(items_df.to_dict("records"), start=1):
+                    name = str(row.get("Product Name", "")).strip()
+                    if not name:
+                        continue  # skip a fully blank trailing row from the editor
+                    try:
+                        quantity = float(row.get("Quantity", 0) or 0)
+                        unit_price = float(row.get("Unit Price (₹)", 0) or 0)
+                    except (TypeError, ValueError):
+                        parse_error = f"Row {row_number} ({name}): quantity and unit price must be numbers."
+                        break
+                    items.append({
+                        "name": name,
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                    })
+
+                if not parse_error and not items:
+                    parse_error = "Add at least one item (product name, quantity, unit price)."
+
+            if parse_error:
+                success, message = False, parse_error
+            else:
+                success, message, _details = apply_po(
+                    user="me",
+                    vendor=vendor,
+                    vendor_email=vendor_email,
+                    department=department,
+                    items=items,
+                    justification=justification,
+                    # Re-validated fresh from the edited fields above,
+                    # same reasoning as LEAVE_REQUEST's force=False.
+                    force=False,
                 )
 
         else:
@@ -3644,10 +4051,27 @@ def render_sidebar(api_key):
         # visible instead of disappearing off the list.
         # ================================
 
-        st.markdown(
-            '<div class="sidebar-section-title">Leave Requests</div>',
-            unsafe_allow_html=True,
-        )
+        # ================================
+        # LEAVE REQUEST STATUS
+        #
+        # Collapsed into a single expander (one "dropdown" for the
+        # whole list, not one per request) so the sidebar doesn't
+        # grow a row per request by default - opening it reveals
+        # every request at once. Always visible (NOT gated behind
+        # Admin Access, since the leave approver isn't necessarily
+        # the same person as the knowledge-base admin). There's no
+        # approve/reject action here: approval is handled elsewhere
+        # (e.g. by whoever owns approve_leave_request()/
+        # reject_leave_request() - a future admin flow, a script, a
+        # different surface). This list just reflects whatever that
+        # status currently is - a request shows "Pending" until it's
+        # acted on, then flips to "Approved"/"Rejected" and stays
+        # visible instead of disappearing off the list.
+        # ================================
+
+        # Most recent first, capped so a busy history doesn't take
+        # over the whole sidebar.
+        all_leave_requests = get_all_leave_requests()[:15]
 
         LEAVE_STATUS_STYLE = {
             "pending": ("Pending", "#c98a2b"),
@@ -3655,46 +4079,127 @@ def render_sidebar(api_key):
             "rejected": ("Rejected", "#d1495b"),
         }
 
-        # Most recent first, capped so a busy history doesn't take
-        # over the whole sidebar.
-        all_leave_requests = get_all_leave_requests()[:15]
+        with st.expander(f"Leave Requests ({len(all_leave_requests)})"):
 
-        if not all_leave_requests:
-            st.markdown(
-                '<div style="color:#eeeeef; font-size:0.85rem;">'
-                "No leave requests yet.</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            for leave_request in all_leave_requests:
-
-                status_label, status_color = LEAVE_STATUS_STYLE.get(
-                    leave_request.get("status"),
-                    (leave_request.get("status", "").title(), "#8a8a94"),
-                )
-
+            if not all_leave_requests:
                 st.markdown(
-                    f"""
-                    <div style="color:#eeeeef; font-size:0.85rem; margin-bottom:0.6rem;">
-                        <strong>{leave_request['user']}</strong> ·
-                        {leave_request['leave_type'].title()} ·
-                        {leave_request['start']} to {leave_request['end']}
-                        ({leave_request['days']}d)
-                        <span style="
-                            display:inline-block;
-                            margin-left:0.35rem;
-                            padding:0.05rem 0.5rem;
-                            border-radius:1rem;
-                            font-size:0.72rem;
-                            font-weight:600;
-                            color:#ffffff;
-                            background:{status_color};
-                        ">{status_label}</span>
-                        {f"<br/><span style='color:#b8b8c2;'>{leave_request['reason']}</span>" if leave_request.get('reason') else ""}
-                    </div>
-                    """,
+                    '<div style="color:#eeeeef; font-size:0.85rem;">'
+                    "No leave requests yet.</div>",
                     unsafe_allow_html=True,
                 )
+            else:
+                for leave_request in all_leave_requests:
+
+                    status_label, status_color = LEAVE_STATUS_STYLE.get(
+                        leave_request.get("status"),
+                        (leave_request.get("status", "").title(), "#8a8a94"),
+                    )
+
+                    st.markdown(
+                        f"""
+                        <div style="color:#eeeeef; font-size:0.85rem; margin-bottom:0.6rem;">
+                            <strong>{leave_request['user']}</strong> ·
+                            {leave_request['leave_type'].title()} ·
+                            {leave_request['start']} to {leave_request['end']}
+                            ({leave_request['days']}d)
+                            <span style="
+                                display:inline-block;
+                                margin-left:0.35rem;
+                                padding:0.05rem 0.5rem;
+                                border-radius:1rem;
+                                font-size:0.72rem;
+                                font-weight:600;
+                                color:#ffffff;
+                                background:{status_color};
+                            ">{status_label}</span>
+                            {f"<br/><span style='color:#b8b8c2;'>{leave_request['reason']}</span>" if leave_request.get('reason') else ""}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+        if st.button("🗑 Clear Leave Requests", use_container_width=True):
+            if clear_leave_requests():
+                st.success("Leave requests cleared.")
+            else:
+                st.error("Couldn't clear leave requests.")
+            st.rerun()
+
+        # ================================
+        # PURCHASE ORDER STATUS
+        #
+        # Same read-only pattern as the Leave Requests list above:
+        # no approve/reject action here, just a status list that
+        # flips Pending -> Approved/Rejected (or shows
+        # "Auto-approved" for POs that cleared under
+        # NOVA_PO_AUTO_APPROVE_THRESHOLD without needing sign-off).
+        # ================================
+
+        # ================================
+        # PURCHASE ORDER STATUS
+        #
+        # Same collapsed-expander pattern as the Leave Requests list
+        # above: no approve/reject action here, just a status list
+        # that flips Pending -> Approved/Rejected (or shows
+        # "Auto-approved" for POs that cleared under
+        # NOVA_PO_AUTO_APPROVE_THRESHOLD without needing sign-off).
+        # ================================
+
+        # ================================
+        # PO APPROVAL IS DONE FROM THE EMAIL. Only sent POs are shown in the sidebar.
+
+        sent_po_requests = get_sent_po_requests()[:15]
+
+        PO_STATUS_STYLE = {
+            "pending": ("Pending", "#c98a2b"),
+            "approved": ("Approved", "#3fae5c"),
+            "auto_approved": ("Auto-approved", "#3fae5c"),
+            "rejected": ("Rejected", "#d1495b"),
+        }
+
+        with st.expander(f"Sent Purchase Orders ({len(sent_po_requests)})"):
+            if not sent_po_requests:
+                st.markdown(
+                    '<div style="color:#eeeeef; font-size:0.85rem;">'
+                    "No sent POs yet.</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                for po_request in sent_po_requests:
+                    item_count = len(po_request.get("items", []))
+                    item_summary = (
+                        f"{item_count} item{'s' if item_count != 1 else ''}"
+                    )
+                    st.markdown(
+                        f"""
+                        <div style="color:#eeeeef; font-size:0.85rem; margin-bottom:0.6rem;">
+                            <strong>{po_request['requester']}</strong> ·
+                            {po_request['vendor']} ·
+                            ₹{po_request.get('total_amount', 0):,.2f}
+                            ({item_summary})
+                            <span style="
+                                display:inline-block;
+                                margin-left:0.35rem;
+                                padding:0.05rem 0.5rem;
+                                border-radius:1rem;
+                                font-size:0.72rem;
+                                font-weight:600;
+                                color:#ffffff;
+                                background:#3fae5c;
+                            ">Sent</span>
+                            <br/><span style="color:#b8b8c2;">{po_request.get('department', '')}</span>
+                            <br/><span style="color:#b8b8c2;">{po_request.get('vendor_email', '')}</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+        if st.button("🗑 Clear POs", use_container_width=True):
+            if clear_po_requests():
+                st.success("PO history cleared.")
+            else:
+                st.error("Couldn't clear PO history.")
+            st.rerun()
 
         st.markdown(
             '<div class="sidebar-section-title">Admin Access</div>',
@@ -4044,6 +4549,75 @@ def main():
 
             confirm_label = "✅ Send to approver"
 
+        elif action["kind"] == "PO_REQUEST":
+
+            st.text_input("Vendor", value=fields.get("vendor", ""), key="edit_action_po_vendor")
+            st.text_input(
+                "Vendor email (PO will be sent here)",
+                value=fields.get("vendor_email", "") or DEFAULT_VENDOR_EMAIL,
+                key="edit_action_po_vendor_email",
+            )
+            st.text_input(
+                "Department",
+                value=fields.get("department", ""),
+                key="edit_action_po_department",
+            )
+
+            # A real editable table - separate Product Name/Quantity/
+            # Unit Price columns, with add/delete rows built in -
+            # instead of asking the user to type "name, qty, price"
+            # comma-separated lines. The edited table is captured
+            # into a plain session_state variable on every render
+            # (rather than relying on the data_editor widget's own
+            # keyed state, whose shape - diff dict vs. full frame -
+            # varies across Streamlit versions), so
+            # _confirm_pending_action always reads a clean DataFrame.
+            items_default_df = pd.DataFrame(
+                [
+                    {
+                        "Product Name": item["name"],
+                        "Quantity": item["quantity"],
+                        "Unit Price (₹)": item["unit_price"],
+                    }
+                    for item in (fields.get("items") or [])
+                ]
+                or [{"Product Name": "", "Quantity": 1, "Unit Price (₹)": 0.0}]
+            )
+
+            edited_items_df = st.data_editor(
+                items_default_df,
+                key="po_items_editor",
+                num_rows="dynamic",
+                use_container_width=True,
+                column_config={
+                    "Product Name": st.column_config.TextColumn(
+                        "Product Name", required=True
+                    ),
+                    "Quantity": st.column_config.NumberColumn(
+                        "Quantity", min_value=0.01, step=1.0, format="%.2f"
+                    ),
+                    "Unit Price (₹)": st.column_config.NumberColumn(
+                        "Unit Price (₹)", min_value=0.0, step=0.01, format="%.2f"
+                    ),
+                },
+            )
+            st.session_state["edit_action_po_items_df"] = edited_items_df
+
+            st.text_input(
+                "Justification (optional)",
+                value=fields.get("justification") or "",
+                key="edit_action_po_justification",
+            )
+
+            if fields.get("errors"):
+                for err in fields["errors"]:
+                    st.error(err)
+            if fields.get("warnings"):
+                for warn in fields["warnings"]:
+                    st.warning(warn)
+
+            confirm_label = "✅ Submit for approval"
+
         else:
 
             st.text_input("Title", value=fields.get("title", ""), key="edit_action_title")
@@ -4192,7 +4766,7 @@ def main():
 
     action_route = route_query(prompt, build_local_history())
 
-    if action_route in ("SEND_MAIL", "SCHEDULE_MEETING", "LEAVE_REQUEST"):
+    if action_route in ("SEND_MAIL", "SCHEDULE_MEETING", "LEAVE_REQUEST", "PO_REQUEST"):
 
         with st.spinner("Reading that back..."):
 
@@ -4200,6 +4774,8 @@ def main():
                 fields, error = extract_mail_fields(prompt)
             elif action_route == "LEAVE_REQUEST":
                 fields, error = extract_leave_fields(prompt)
+            elif action_route == "PO_REQUEST":
+                fields, error = extract_po_fields(prompt)
             else:
                 fields, error = extract_meeting_fields(prompt)
 
