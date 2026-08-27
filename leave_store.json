@@ -6,5 +6,17 @@
       "casual": 6
     }
   },
-  "requests": []
+  "requests": [
+    {
+      "id": "d6e3db5d-9d46-4f2b-8c9a-9971c68fda3d",
+      "user": "me",
+      "leave_type": "annual",
+      "start": "2026-08-28",
+      "end": "2026-08-28",
+      "days": 1,
+      "reason": "Requested via NOVA autonomous task execution",
+      "status": "pending",
+      "requested_at": "2026-08-27T18:09:33"
+    }
+  ]
 }

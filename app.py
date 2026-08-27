@@ -99,6 +99,19 @@ from rag import (
 import planning_agent
 
 # ---------------------------------------------------
+# Autonomous Task Executor
+#
+# Sits on top of planning_agent.py without changing it: adds ACTION
+# steps (things that actually change state, not just read it), lets a
+# later step consume an earlier step's real output, retries a failed
+# step with backoff instead of giving up on the first try, and runs a
+# VERIFY step after every action to confirm it actually took effect.
+# Wired into the "AUTO_EXECUTE" route below - every other route/agent
+# in this file is untouched.
+# ---------------------------------------------------
+import autonomous_executor
+
+# ---------------------------------------------------
 # Timing log
 #
 # Writes straight to a file next to app.py, so it's findable
@@ -1831,6 +1844,31 @@ def is_followup_question(question, previous_route):
     )
 
 
+# ---------------------------------------------------
+# Autonomous task detection
+#
+# Deliberately much narrower than planning_agent.looks_like_plan_request():
+# that one just needs >=2 agent categories + a compound-question shape.
+# This needs a request that's asking NOVA to actually DO something
+# (apply/submit, reassign) about a leave conflict, not merely check/
+# report on one - so a read-only "check my meetings and pending POs
+# before I go on leave" (no "apply"/"reassign") still goes to the
+# ordinary read-only PLAN route below, unchanged. Narrow on purpose:
+# false negatives just fall back to PLAN (safe, already working);
+# false positives would start taking real actions on a question that
+# only wanted a report.
+# ---------------------------------------------------
+
+def _looks_like_autonomous_action_request(question):
+    q = question.lower()
+
+    mentions_leave = re.search(r"\b(leave|vacation|time off|pto)\b", q) is not None
+    mentions_apply = bool(re.search(r"\b(apply|submit)\b", q))
+    mentions_reassign = "reassign" in q
+
+    return mentions_leave and mentions_apply and mentions_reassign
+
+
 def route_query(question, conversation_history=""):
     """
     Hybrid query-routing agent.
@@ -1965,6 +2003,10 @@ def route_query(question, conversation_history=""):
     # single-topic question that merely mentions two nouns in passing
     # still falls through to the ordinary routes below.
     # =========================================================
+
+    if planning_agent.looks_like_plan_request(question) and _looks_like_autonomous_action_request(question):
+        log_timing("route_query -> 'AUTO_EXECUTE' (fast, compound action request)")
+        return "AUTO_EXECUTE"
 
     if planning_agent.looks_like_plan_request(question):
         log_timing("route_query -> 'PLAN' (fast, compound request)")
@@ -4398,6 +4440,179 @@ def _resolve_web_search_query(question):
     return resolved_query
 
 
+# =====================================================================
+# AUTONOMOUS TASK EXECUTOR - EXECUTORS FOR THE LEAVE + REASSIGN TASK
+#
+# Wires autonomous_executor.py's generic step-runner to this app's
+# real functions, for exactly the "I'm going on leave tomorrow, check
+# my meetings/POs, reassign conflicts, apply my leave" task. Reuses
+# the SAME deterministic date-window/conflict lookups the read-only
+# PLAN route already relies on (_extract_plan_date_window,
+# check_po_due_conflict, get_events_in_range) so a report given
+# through PLAN and an action taken through AUTO_EXECUTE never
+# disagree about what actually conflicts.
+# =====================================================================
+
+def _read_meetings_window(start_date, end_date):
+    events = get_events_in_range(start_date, end_date, user="me")
+    context = (
+        "\n".join(f"- {event}" for event in events)
+        if events
+        else f"No meetings found between {start_date} and {end_date}."
+    )
+    return context, events
+
+
+def _read_pos_window(start_date, end_date):
+    try:
+        conflicting_pos = check_po_due_conflict("me", start_date, end_date)
+    except Exception as error:
+        raise RuntimeError(f"PO lookup failed: {error}")
+
+    descriptions = [
+        f"{po.get('id', '?')} ({po.get('vendor', 'N/A')}) due {po.get('due_date', '?')}"
+        for po in conflicting_pos
+    ]
+    context = (
+        "\n".join(f"- {d}" for d in descriptions)
+        if descriptions
+        else f"No POs due between {start_date} and {end_date}."
+    )
+    return context, descriptions
+
+
+def _action_reassign_conflicts(params):
+    conflicting_meetings = params.get("conflicting_meetings") or []
+    conflicting_pos = params.get("conflicting_pos") or []
+    backup_email = os.getenv("NOVA_LEAVE_BACKUP_EMAIL", "").strip()
+
+    if not conflicting_meetings and not conflicting_pos:
+        return True, "No conflicting meetings or POs found - nothing needed reassigning.", {"reassigned": 0}
+
+    if not backup_email:
+        return (
+            False,
+            "Found conflicting item(s) but couldn't reassign them - no backup "
+            "contact is configured (set NOVA_LEAVE_BACKUP_EMAIL).",
+            {"reassigned": 0},
+        )
+
+    body_lines = ["Hi,", "", "I'm going on leave and the following need coverage:"]
+    if conflicting_meetings:
+        body_lines.append("\nMeetings:")
+        body_lines.extend(f"- {m}" for m in conflicting_meetings)
+    if conflicting_pos:
+        body_lines.append("\nPurchase orders:")
+        body_lines.extend(f"- {po}" for po in conflicting_pos)
+    body_lines.append("\nCould you please take these over while I'm out? Thanks!")
+
+    success, message = send_mail(backup_email, "Coverage needed while I'm on leave", "\n".join(body_lines))
+
+    reassigned_count = len(conflicting_meetings) + len(conflicting_pos)
+
+    if not success:
+        raise RuntimeError(f"reassignment email failed: {message}")
+
+    return True, f"Notified {backup_email} to cover {reassigned_count} conflicting item(s).", {
+        "reassigned": reassigned_count,
+        "notified": backup_email,
+    }
+
+
+def _action_apply_leave(params):
+    success, message, details = apply_leave(
+        params.get("user", "me"),
+        params.get("leave_type", "annual"),
+        params.get("start_date"),
+        params.get("end_date"),
+        params.get("reason", ""),
+        force=bool(params.get("force", False)),
+    )
+    if not success:
+        # Not raised as an exception - a blocking validation error
+        # (e.g. insufficient balance) isn't a transient failure that
+        # retrying would fix, so it's reported as a normal failed
+        # step instead of being retried pointlessly.
+        return False, message, details or {}
+    return True, message, details or {}
+
+
+def _verify_leave_applied(params):
+    user = params.get("user", "me")
+    start_date, end_date = params.get("start_date"), params.get("end_date")
+
+    try:
+        history = get_leave_history(user)
+    except Exception as error:
+        raise RuntimeError(f"leave history lookup failed: {error}")
+
+    for record in history:
+        if str(record.get("start_date")) == str(start_date) and str(record.get("end_date")) == str(end_date):
+            return True, f"Verified: leave request is recorded with status '{record.get('status', 'unknown')}'.", record
+
+    return False, "Could not find a matching leave record after applying - verification failed.", {}
+
+
+def _build_autonomous_leave_plan(question):
+    """
+    Returns (steps, start_date, end_date). steps is None if no leave
+    window could be extracted from the question at all - the caller
+    falls back to telling the user rather than guessing dates.
+    """
+
+    start_date, end_date = _extract_plan_date_window(question)
+    if not start_date:
+        return None, None, None
+
+    leave_type_match = re.search(r"\b(sick|casual|annual|earned|pto)\b", question.lower())
+    leave_type = leave_type_match.group(1) if leave_type_match else "annual"
+
+    steps = [
+        autonomous_executor.TaskStep(
+            id="read_meetings", kind=autonomous_executor.STEP_KIND_READ, name="MEETINGS_WINDOW",
+            query="meetings during the leave window",
+            description="Check calendar for the leave window",
+        ),
+        autonomous_executor.TaskStep(
+            id="read_pos", kind=autonomous_executor.STEP_KIND_READ, name="PO_WINDOW",
+            query="pending POs due during the leave window",
+            description="Check pending POs due during the leave window",
+        ),
+        autonomous_executor.TaskStep(
+            id="reassign", kind=autonomous_executor.STEP_KIND_ACTION, name="REASSIGN_CONFLICTS",
+            params={
+                "conflicting_meetings": "{read_meetings.output.sources}",
+                "conflicting_pos": "{read_pos.output.sources}",
+            },
+            depends_on=["read_meetings", "read_pos"],
+            description="Reassign any conflicting meetings/POs to a backup",
+        ),
+        autonomous_executor.TaskStep(
+            id="apply_leave", kind=autonomous_executor.STEP_KIND_ACTION, name="APPLY_LEAVE",
+            params={
+                "user": "me", "leave_type": leave_type,
+                "start_date": start_date, "end_date": end_date,
+                "reason": "Requested via NOVA autonomous task execution",
+            },
+            # Deliberately depends on the READS, not on "reassign" -
+            # reassigning conflicts and applying the leave are two
+            # independent actions on the same underlying data. If
+            # reassignment fails (e.g. no backup contact configured),
+            # the user still wants their leave applied; it shouldn't
+            # get blocked by an unrelated action's failure.
+            depends_on=["read_meetings", "read_pos"],
+            description=f"Apply {leave_type} leave ({start_date} to {end_date})",
+        ),
+        autonomous_executor.TaskStep(
+            id="verify_leave", kind=autonomous_executor.STEP_KIND_VERIFY, name="VERIFY_LEAVE",
+            params={"user": "me", "start_date": start_date, "end_date": end_date},
+            depends_on=["apply_leave"],
+            description="Verify the leave request was recorded",
+        ),
+    ]
+    return steps, start_date, end_date
+
+
 def build_routed_prompt(question, conversation_history):
     """
     Shared routing + evidence-retrieval + prompt-construction logic.
@@ -4739,6 +4954,64 @@ def build_routed_prompt(question, conversation_history):
         )
 
     # =========================================================
+    # AUTONOMOUS TASK EXECUTOR
+    #
+    # Not a read: check meetings/POs for the leave window, reassign
+    # whatever actually conflicts, apply the leave, then verify it
+    # was recorded - each step run through autonomous_executor.py so
+    # a transient failure gets retried and a dependent step never
+    # runs against data an earlier step failed to produce.
+    # `auto_results` is captured in the enclosing scope for the
+    # prompt-construction section below and the UI trace at the end
+    # of this function, the same way plan_step_results is for PLAN.
+    # =========================================================
+
+    elif route == "AUTO_EXECUTE":
+
+        auto_steps, auto_start, auto_end = _build_autonomous_leave_plan(question)
+
+        if not auto_steps:
+            auto_results = []
+            sources = []
+            context = (
+                "I couldn't work out a leave date/window from that request, "
+                "so I didn't take any action."
+            )
+        else:
+            read_executors = {
+                "MEETINGS_WINDOW": lambda q: _read_meetings_window(auto_start, auto_end),
+                "PO_WINDOW": lambda q: _read_pos_window(auto_start, auto_end),
+            }
+            action_executors = {
+                "REASSIGN_CONFLICTS": _action_reassign_conflicts,
+                "APPLY_LEAVE": _action_apply_leave,
+            }
+            verify_executors = {
+                "VERIFY_LEAVE": _verify_leave_applied,
+            }
+
+            try:
+                auto_results = autonomous_executor.execute_autonomous_plan(
+                    auto_steps, read_executors, action_executors, verify_executors
+                )
+            except Exception as error:
+                log_timing(f"execute_autonomous_plan FAILED: {error}")
+                auto_results = []
+
+            sources = [
+                source
+                for result in auto_results
+                if result.step.kind == autonomous_executor.STEP_KIND_READ
+                for source in result.sources
+            ]
+            context = ""  # AUTO_EXECUTE's prompt is built entirely below, from auto_results
+
+        log_timing(
+            f"autonomous task executed ({len(auto_results)} step(s)) in "
+            f"{time.perf_counter() - retrieval_start:.2f}s"
+        )
+
+    # =========================================================
     # CHAT AGENT
     # =========================================================
 
@@ -5028,6 +5301,17 @@ ANSWER:
             findings=plan_findings,
         )
 
+    elif route == "AUTO_EXECUTE":
+
+        today_line = datetime.now().strftime("%A, %Y-%m-%d")
+
+        prompt = autonomous_executor.build_autonomous_prompt(
+            question,
+            conversation_history,
+            today_line,
+            auto_results,
+        )
+
     else:
 
         prompt = f"""
@@ -5062,6 +5346,15 @@ Answer naturally and concisely.
         plan_deterministic_verdict if route == "PLAN" else None
     )
 
+    # AUTO_EXECUTE gets its own trace - same "Plan" expander shape as
+    # PLAN's (one line per step), just sourced from autonomous_executor's
+    # richer step results (kind + retry count) instead of planning_agent's.
+    st.session_state.last_auto_trace = (
+        autonomous_executor.format_execution_trace(auto_results)
+        if route == "AUTO_EXECUTE"
+        else None
+    )
+
     return route, sources, prompt
 
 
@@ -5090,7 +5383,7 @@ def stream_ollama_response(question):
     # Deterministic for grounded fact-extraction so the model
     # doesn't drift on numbers/specifics; only plain chat gets
     # any warmth.
-    generation_temperature = 0.0 if route in ("WEB", "DOCUMENT", "MAIL", "MEETINGS", "SELF_INFO", "PLAN") else 0.5
+    generation_temperature = 0.0 if route in ("WEB", "DOCUMENT", "MAIL", "MEETINGS", "SELF_INFO", "PLAN", "AUTO_EXECUTE") else 0.5
 
     response = OLLAMA_SESSION.post(
         OLLAMA_URL,
@@ -5831,6 +6124,7 @@ def main():
                     "CHAT": "💬 Chat",
                     "SELF_INFO": "⚙️ About NOVA",
                     "PLAN": "🧭 Planning Agent",
+                    "AUTO_EXECUTE": "🤖 Autonomous Agent",
                 }.get(message.get("route"), None)
 
                 if route_badge:
@@ -6374,6 +6668,7 @@ def main():
                 "CHAT": "💬 Chat",
                 "SELF_INFO": "⚙️ About NOVA",
                 "PLAN": "🧭 Planning Agent",
+                "AUTO_EXECUTE": "🤖 Autonomous Agent",
             }.get(
                 st.session_state.get("last_route"),
                 None,
@@ -6406,6 +6701,16 @@ def main():
             if plan_trace:
                 with st.expander("Plan"):
                     for line in plan_trace:
+                        st.markdown(f"- {line}")
+
+            # AUTO_EXECUTE's own trace - same shape, but each line also
+            # shows whether a step was a check, a real action, or the
+            # closing verification, plus any retries it needed.
+            auto_trace = st.session_state.get("last_auto_trace")
+
+            if auto_trace:
+                with st.expander("Task Execution"):
+                    for line in auto_trace:
                         st.markdown(f"- {line}")
 
             sources = st.session_state.get("last_sources")
