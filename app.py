@@ -4547,7 +4547,7 @@ def _verify_leave_applied(params):
         raise RuntimeError(f"leave history lookup failed: {error}")
 
     for record in history:
-        if str(record.get("start_date")) == str(start_date) and str(record.get("end_date")) == str(end_date):
+        if str(record.get("start")) == str(start_date) and str(record.get("end")) == str(end_date):
             return True, f"Verified: leave request is recorded with status '{record.get('status', 'unknown')}'.", record
 
     return False, "Could not find a matching leave record after applying - verification failed.", {}

@@ -8,7 +8,29 @@
   },
   "requests": [
     {
-      "id": "d6e3db5d-9d46-4f2b-8c9a-9971c68fda3d",
+      "id": "db50b616-1ad5-4553-9b34-a5db22f50f9e",
+      "user": "me",
+      "leave_type": "annual",
+      "start": "2026-09-01",
+      "end": "2026-09-01",
+      "days": 1,
+      "reason": "Requested via NOVA autonomous task execution",
+      "status": "pending",
+      "requested_at": "2026-08-28T10:28:03"
+    },
+    {
+      "id": "8c35cf4e-1723-4d94-8d3f-0c88f117485f",
+      "user": "me",
+      "leave_type": "annual",
+      "start": "2026-09-02",
+      "end": "2026-09-02",
+      "days": 1,
+      "reason": "Requested via NOVA autonomous task execution",
+      "status": "pending",
+      "requested_at": "2026-08-28T10:35:10"
+    },
+    {
+      "id": "7d275e38-f5ab-4be6-bbcc-e099c556c5a7",
       "user": "me",
       "leave_type": "annual",
       "start": "2026-08-28",
@@ -16,7 +38,7 @@
       "days": 1,
       "reason": "Requested via NOVA autonomous task execution",
       "status": "pending",
-      "requested_at": "2026-08-27T18:09:33"
+      "requested_at": "2026-08-28T10:39:32"
     }
   ]
 }
