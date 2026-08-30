@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from google import genai
 from dotenv import load_dotenv
@@ -1370,6 +1371,11 @@ def initialise_session():
         st.session_state.messages = load_chat_messages(
             st.session_state.current_chat_id
         )
+
+    if "view" not in st.session_state:
+        # "chat" (default) or "dashboard" - controls whether main()
+        # renders the normal chat UI or the test-evaluation dashboard.
+        st.session_state.view = "chat"
 
 
 def get_gemini_history():
@@ -5638,6 +5644,30 @@ def render_sidebar(api_key):
             unsafe_allow_html=True,
         )
 
+        # ================================
+        # NEW CHAT + DASHBOARD
+        #
+        # Kept at the very top of the sidebar, above AI Mode, since
+        # both are navigation actions (start fresh / leave the chat
+        # entirely) rather than settings - they read better as the
+        # first thing you see, not buried below a dropdown.
+        # ================================
+
+        if st.button(
+            "＋  New Chat",
+            use_container_width=True,
+        ):
+            clear_chat()
+            st.session_state.view = "chat"
+            st.rerun()
+
+        if st.button(
+            "📊  Dashboard",
+            use_container_width=True,
+        ):
+            st.session_state.view = "dashboard"
+            st.rerun()
+
         st.markdown(
             '<div class="sidebar-section-title">AI Mode</div>',
             unsafe_allow_html=True,
@@ -5954,18 +5984,6 @@ def render_sidebar(api_key):
                             unsafe_allow_html=True,
                         )
 
-        st.markdown(
-            '<div class="sidebar-section-title">Chat</div>',
-            unsafe_allow_html=True,
-        )
-
-        if st.button(
-            "＋  New Chat",
-            use_container_width=True,
-        ):
-            clear_chat()
-            st.rerun()
-
         # ================================
         # SAVED CONVERSATIONS
         # ================================
@@ -6004,7 +6022,12 @@ def render_sidebar(api_key):
                             chat_id
                         )
 
-                        st.rerun()
+                    # Always reset to "chat" view (even if this chat
+                    # was already the active one) - lets clicking a
+                    # conversation tile from the Dashboard view bring
+                    # you back to the chat UI.
+                    st.session_state.view = "chat"
+                    st.rerun()
 
         if st.button(
             "⌫  Delete chat history",
@@ -6035,6 +6058,53 @@ def render_sidebar(api_key):
     return model_name
 
 
+def render_dashboard_view():
+    """
+    Embeds the evaluation dashboard (reports/dashboard.html, built by
+    generate_dashboard.py from the pytest suite's latest run) inside
+    NOVA's own UI. Deliberately just embeds the already-generated
+    file rather than re-computing metrics here - keeps the test
+    framework's reporting logic in one place (generate_dashboard.py)
+    instead of duplicating it into the Streamlit app.
+    """
+
+    st.markdown(
+        """
+        <div class="nova-topbar">
+            <div class="nova-top-logo">
+                <span>✦</span> NOVA — Evaluation Dashboard
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    dashboard_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "reports",
+        "dashboard.html",
+    )
+
+    if not os.path.exists(dashboard_path):
+        st.info(
+            "No dashboard yet. Run the test suite and generate it first:\n\n"
+            "```\npytest tests/ -v\npython generate_dashboard.py\n```\n\n"
+            "Then click **Dashboard** again."
+        )
+        return
+
+    with open(dashboard_path, "r", encoding="utf-8") as dashboard_file:
+        dashboard_html = dashboard_file.read()
+
+    last_updated = datetime.fromtimestamp(
+        os.path.getmtime(dashboard_path)
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    st.caption(f"Last generated: {last_updated}")
+
+    components.html(dashboard_html, height=1400, scrolling=True)
+
+
 def main():
     apply_custom_styles()
     initialise_session()
@@ -6051,6 +6121,10 @@ def main():
     api_key = get_api_key()
     groq_api_key = get_groq_api_key()
     selected_model = render_sidebar(api_key)
+
+    if st.session_state.view == "dashboard":
+        render_dashboard_view()
+        return
 
     # The single active key for whichever provider is selected -
     # this is what gets passed down to the stream/follow-up calls

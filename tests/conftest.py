@@ -436,7 +436,15 @@ def fixture_ics_path(tmp_path):
         "END:VCALENDAR\r\n"
     )
     path = tmp_path / "test_calendar.ics"
-    path.write_text(ics_content, encoding="utf-8")
+    # newline="" is required: ics_content already has explicit \r\n
+    # line endings, and write_text()'s default universal-newline
+    # translation on Windows turns every \n into \r\n - doubling the
+    # \r to \r\r\n and corrupting the DTSTART line just enough that
+    # icalendar fails to parse it (rag.py degrades gracefully on a
+    # bad file, so this failed silently as "zero events found"
+    # rather than a crash). Linux/macOS don't do this translation,
+    # which is why it only showed up on Windows.
+    path.write_text(ics_content, encoding="utf-8", newline="")
     return path
 
 
@@ -456,3 +464,91 @@ def mock_calendar(monkeypatch, rag_module, fixture_ics_path):
         {**rag_module.MEETINGS_CALENDARS, "me": str(fixture_ics_path)},
     )
     return fixture_ics_path
+
+# ---------------------------------------------------------------
+# 6. Dashboard reporting - pytest_runtest_makereport / sessionfinish
+# ---------------------------------------------------------------
+#
+# Collects one record per test (outcome, duration, markers, suite)
+# during the run, then on session finish rotates the previous
+# latest_run.json -> previous_run.json and writes the new
+# latest_run.json. generate_dashboard.py reads these two files.
+
+import datetime
+import time
+
+REPORTS_DIR = PROJECT_ROOT / "reports"
+LATEST_RUN_PATH = REPORTS_DIR / "latest_run.json"
+PREVIOUS_RUN_PATH = REPORTS_DIR / "previous_run.json"
+
+_test_records: dict[str, dict] = {}
+_session_start_time: float = 0.0
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Runs once per phase (setup/call/teardown) for every test. We
+    only want ONE record per test, so:
+      - a normal pass/fail is decided on the "call" phase
+      - a skip (skipif/xfail/pytest.skip) shows up on "setup" and
+        there is no "call" phase to overwrite it
+      - a fixture error (e.g. a broken mock fixture) also shows up
+        as a failure on "setup" with no "call" phase
+    Whichever phase actually produces an outcome for a given nodeid
+    wins; we never downgrade an already-recorded failed/skipped
+    result back to "passed" from teardown.
+    """
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when == "call":
+        decisive = True
+    elif report.when == "setup" and report.outcome in ("failed", "skipped"):
+        decisive = True
+    else:
+        decisive = False
+
+    if not decisive:
+        return
+
+    markers = sorted({m.name for m in item.iter_markers()})
+    suite = Path(item.fspath).stem
+
+    message = None
+    if report.outcome == "failed":
+        message = str(report.longrepr)
+
+    _test_records[item.nodeid] = {
+        "nodeid": item.nodeid,
+        "suite": suite,
+        "markers": markers,
+        "outcome": report.outcome,  # "passed" | "failed" | "skipped"
+        "duration": round(report.duration, 4),
+        "message": message,
+    }
+
+
+def pytest_sessionstart(session):
+    global _session_start_time
+    _session_start_time = time.time()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if LATEST_RUN_PATH.exists():
+        PREVIOUS_RUN_PATH.write_text(
+            LATEST_RUN_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    run_data = {
+        "run_timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "total_duration_seconds": round(time.time() - _session_start_time, 2),
+        "exit_status": int(exitstatus),
+        "tests": list(_test_records.values()),
+    }
+
+    LATEST_RUN_PATH.write_text(
+        json.dumps(run_data, indent=2), encoding="utf-8"
+    )

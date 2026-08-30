@@ -1,0 +1,2387 @@
+{
+  "run_timestamp": "2026-08-30T21:50:05",
+  "total_duration_seconds": 33.8,
+  "exit_status": 1,
+  "tests": [
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_app_and_rag_import",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0003,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_fast_path_routing_needs_no_mocks",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0022,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_session_state_resets_between_tests",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_session_state_actually_reset",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_mock_ollama_router_returns_scripted_label",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.003,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_mock_ollama_error_injection_falls_back_to_chat",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_isolated_leave_store_is_empty_and_writable",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 4.7343,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_mock_mail_search_returns_scripted_inbox",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0018,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_mock_mail_send_records_message",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_mock_web_search_returns_scripted_results",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_00_harness_smoke.py::test_mock_calendar_reads_fixture_ics",
+      "suite": "test_00_harness_smoke",
+      "markers": [],
+      "outcome": "passed",
+      "duration": 0.0119,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[what does my uploaded document say about the policy]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[summarize the uploaded file]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0015,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[check my uploaded pdf for the clause]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[according to the document, what is the notice period]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[according to the file, when does this expire]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[in the document, is there a mention of overtime]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[from the file, what's the budget]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[what does my document say]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[check my file for the address]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[search my pdf for the total]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[what's in the knowledge base about onboarding]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_document_fast_routing[check the stored document for that]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what embedding model do you use]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what model does nova use]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what model do you use]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what llm are you]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[which llm powers this]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what model are you running]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[which model are you running]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what model powers this app]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what is your router model]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0015,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what is the answer model]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[what ai model is this]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_info_fast_routing[which ai model do you run on]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[hi]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[hii]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[hello]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[hey]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[yo]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[sup]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[good morning]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[good evening]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[how are you]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[how's it going]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[thanks]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[thank you so much]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[ok]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[cool]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[lol]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[bye]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[see ya]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[Hi!]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[  hello  ]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_greeting_fast_routing[HELLO.]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0005,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_self_introduction_fast_routing[i'm kishore]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_self_introduction_fast_routing[I am Kishore]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_self_introduction_fast_routing[my name is Kishore]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_self_introduction_fast_routing[this is Kishore]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_self_introduction_fast_routing[call me Kishore]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_chat_self_introduction_fast_routing[im priya!]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_introduction_does_not_swallow_trailing_request",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_greeting_with_real_question_falls_through",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_plan_fast_routing_for_compound_requests[check my meetings, pending POs, and emails before I go on leave tomorrow]",
+      "suite": "test_01_routing",
+      "markers": [
+        "a2a",
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0015,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_plan_fast_routing_for_compound_requests[make sure nothing is impacted - check my calendar and my inbox]",
+      "suite": "test_01_routing",
+      "markers": [
+        "a2a",
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_plan_fast_routing_for_compound_requests[check my email and my meetings before I take leave]",
+      "suite": "test_01_routing",
+      "markers": [
+        "a2a",
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_plan_fast_routing_for_compound_requests[check on my expenses as well as my POs]",
+      "suite": "test_01_routing",
+      "markers": [
+        "a2a",
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_auto_execute_fast_routing_for_actionable_leave_conflict",
+      "suite": "test_01_routing",
+      "markers": [
+        "a2a",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_compound_shaped_request_without_reassign_stays_plan_not_auto_execute",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_single_topic_mentioning_two_nouns_is_not_a_plan",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[send an email to Sarah about the deadline]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[send email to the team]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[send a mail to Priya]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[compose an email to HR]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[draft an email to the vendor]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[draft me an email to legal]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[reply to Sarah's message]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[forward this to my manager]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_literal_signals[forward that to accounts]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_verb_gap_to_regex[reply thanks to Kishore]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_verb_gap_to_regex[reply thanks in mail to Kishore]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_verb_gap_to_regex[forward the attached file to accounts]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_fast_routing_send_to_mail_regex",
+      "suite": "test_01_routing",
+      "markers": [
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_send_mail_takes_precedence_over_readonly_mail",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_readonly_reply_question_is_not_send_mail",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 10.0235,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[schedule a meeting with the design team]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[schedule a call for Friday]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[set up a meeting with Priya]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[set up a call with the vendor]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[book a meeting for 3pm]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[book a call with legal]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0015,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[arrange a meeting with HR]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[add to my calendar: dentist at 5pm]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0014,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[add an event for tomorrow]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[create a meeting with the team]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[create an event called standup]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0016,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_literal_signals[schedule an event for Monday]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_verb_gap_regex[schedule me a meeting with the finance team]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_verb_gap_regex[book a call with priya friday]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_verb_gap_regex[please set up a quick sync with the team]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_fast_routing_verb_gap_regex[add a reminder for tomorrow morning]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_schedule_meeting_precedence_over_readonly_meetings",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_readonly_appointment_question_is_not_schedule_meeting",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0015,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[apply for leave next week]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[apply leave for Monday]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[request leave for 3 days]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[take leave tomorrow]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[book leave for Friday]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0016,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[leave request for sick leave]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[I need sick leave]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[how much annual leave do I have]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[casual leave balance]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[vacation leave for next month]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0016,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[what's my leave balance]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[show my leave history]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_literal_signals[how many leave days do I have left]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0014,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_verb_gap_regex[please apply for two days of leave]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_verb_gap_regex[request some leave]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_leave_request_fast_routing_verb_gap_regex[take a week of leave]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_literal_signals[raise a purchase order for laptops]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_literal_signals[create a po for 10 monitors]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0014,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_literal_signals[submit po for office chairs]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_literal_signals[what's my po status]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0014,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_literal_signals[show my pos]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_literal_signals[check my po history]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_bare_po_plus_verb[is my po approved]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0021,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_bare_po_plus_verb[any pending po]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_bare_po_plus_verb[status of po 1042]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_po_request_fast_routing_verb_gap_regex",
+      "suite": "test_01_routing",
+      "markers": [
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_bare_po_word_without_verb_does_not_force_po_route",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.074,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_literal_signals[file an expense claim for travel]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_literal_signals[submit an expense for the hotel]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_literal_signals[claim reimbursement for my flight]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_literal_signals[reimburse me for the taxi]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_literal_signals[get reimbursed for lunch]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_literal_signals[what's my expense report status]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_literal_signals[show my expenses]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_literal_signals[reimbursement status for last month]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_verb_gap_regex",
+      "suite": "test_01_routing",
+      "markers": [
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_expense_request_fast_routing_bare_expense_plus_verb",
+      "suite": "test_01_routing",
+      "markers": [
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_literal_signals[check my email]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_literal_signals[any new emails]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_literal_signals[what's in my inbox]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0024,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_literal_signals[check my mailbox]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0016,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_literal_signals[do I have unread mail]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_literal_signals[who emailed me about the invoice]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_literal_signals[did Sarah email me back]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_bare_mail_word_boundary[summarize the last received mail]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mail_fast_routing_bare_mail_word_boundary[any new mail?]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0026,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mailbox_lookalike_words_do_not_false_positive",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0684,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_meetings_fast_routing[what's on my calendar today]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_meetings_fast_routing[do I have any meetings tomorrow]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0006,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_meetings_fast_routing[am I free at 3pm]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_meetings_fast_routing[am I busy this afternoon]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_meetings_fast_routing[what's my schedule for Monday]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0011,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_meetings_fast_routing[show my agenda for today]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[who is the CEO of Tesla]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[who was the first president of the US]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[what's the weather in Chennai]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[latest news on AI]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0015,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[current price of gold]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[what's the stock price of Apple]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[founder of Microsoft]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[capital of France]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[population of India]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[exchange rate USD to INR]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_fast_routing[what's trending right now]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0012,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_web_word_boundary_does_not_false_positive_on_substring",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0701,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_followup_inherits_eligible_previous_route[MAIL]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_followup_inherits_eligible_previous_route[MEETINGS]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.001,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_followup_inherits_eligible_previous_route[DOCUMENT]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_followup_inherits_eligible_previous_route[WEB]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0017,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_followup_does_not_inherit_from_ineligible_previous_route",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0015,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_self_contained_new_topic_is_not_treated_as_followup",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0017,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_referential_followup_with_pronoun_is_still_a_followup",
+      "suite": "test_01_routing",
+      "markers": [
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0024,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[DOCUMENT-DOCUMENT]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0017,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[PLAN-PLAN]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0021,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[SEND_MAIL-SEND_MAIL]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0018,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[SEND MAIL-SEND_MAIL]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0017,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[SCHEDULE_MEETING-SCHEDULE_MEETING]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0021,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[LEAVE_REQUEST-LEAVE_REQUEST]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0018,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[PO_REQUEST-PO_REQUEST]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0022,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[PO REQUEST-PO_REQUEST]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0019,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[EXPENSE_REQUEST-EXPENSE_REQUEST]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0013,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[MAIL-MAIL]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0017,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[MEETINGS-MEETINGS]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0022,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[WEB-WEB]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0022,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[SOMETHING_UNRECOGNIZED-CHAT]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0026,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_label_mapping[-CHAT]",
+      "suite": "test_01_routing",
+      "markers": [
+        "parametrize",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.002,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_precedence_send_mail_over_mail",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0016,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_llm_fallback_precedence_schedule_over_meeting",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0016,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_router_falls_back_to_chat_on_ollama_timeout",
+      "suite": "test_01_routing",
+      "markers": [
+        "failure",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0017,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_router_falls_back_to_chat_on_connection_error",
+      "suite": "test_01_routing",
+      "markers": [
+        "failure",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0009,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_router_falls_back_to_chat_on_malformed_llm_json",
+      "suite": "test_01_routing",
+      "markers": [
+        "failure",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0016,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_empty_string_query_does_not_crash",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0018,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_whitespace_only_query_does_not_crash",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0018,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_very_long_query_does_not_crash",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0035,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_mixed_case_and_punctuation_still_routes",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_query_with_special_characters_does_not_crash",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0017,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_01_routing.py::test_ambiguous_multi_domain_single_topic_query_is_deterministic",
+      "suite": "test_01_routing",
+      "markers": [
+        "edge_case",
+        "routing"
+      ],
+      "outcome": "passed",
+      "duration": 0.0008,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_apply_leave_creates_pending_record_and_notifies_approver",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.0234,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_apply_leave_with_no_approver_configured_still_saves_record",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "edge_case"
+      ],
+      "outcome": "passed",
+      "duration": 0.014,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_apply_leave_rejects_end_before_start_and_creates_no_record",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "edge_case",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 0.0004,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_apply_leave_rejects_insufficient_balance",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 0.0004,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_approve_leave_request_deducts_balance_and_notifies_requester",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.026,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_reject_leave_request_does_not_touch_balance",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.0443,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_approve_nonexistent_leave_request_fails_cleanly",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 0.0002,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_approving_an_already_approved_request_is_rejected",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "edge_case",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 8.9333,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_apply_po_creates_pending_record_and_only_emails_approver",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.0127,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_approve_po_request_marks_approved_and_emails_vendor",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.0336,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_reject_po_request_never_emails_vendor",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.0221,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_apply_po_auto_approves_under_threshold_and_emails_vendor_immediately",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "regression"
+      ],
+      "outcome": "failed",
+      "duration": 0.0087,
+      "message": "isolated_stores = namespace(tmp_path=WindowsPath('C:/Users/manju/AppData/Local/Temp/pytest-of-manju/pytest-6/test_apply_po_auto_approves_un0'))\nmock_mail = namespace(messages=[], sent=[], smtp_error=None, set_inbox=<function mock_mail.<locals>.set_inbox at 0x0000024A76A71D20>)\nrag_module = <module 'rag' from 'D:\\\\NOVA\\\\rag.py'>\n\n    @pytest.mark.agent\n    @pytest.mark.regression\n    def test_apply_po_auto_approves_under_threshold_and_emails_vendor_immediately(\n        isolated_stores, mock_mail, rag_module\n    ):\n        \"\"\"\n        KNOWN BUG (as of this writing): apply_po() saves the record with\n        status=\"auto_approved\" and THEN calls approve_po_request(id) to\n        send the vendor email - but approve_po_request() refuses to act\n        on any request whose status isn't \"pending\", so it immediately\n        rejects itself with \"That request is already auto_approved.\" The\n        vendor is silently never emailed on an auto-approved PO. This\n        test encodes the CORRECT behavior and will fail until apply_po()\n        is fixed to either set status=\"pending\" before calling\n        approve_po_request(), or send the vendor email directly instead\n        of routing through approve_po_request().\n        \"\"\"\n        rag_module.PO_AUTO_APPROVE_THRESHOLD = 5000.0  # our 1000 PO qualifies\n    \n        ok, message, details = rag_module.apply_po(\n            \"kishore\", \"Dell\", \"engineering\", _basic_po_items(),\n            vendor_email=\"vendor@test.local\",\n        )\n    \n        assert ok is True, message\n        record = details[\"record\"]\n        assert record[\"status\"] == \"auto_approved\"\n    \n        # Auto-approval should have driven the SAME vendor-notification\n        # path as a manual approve - the vendor really got emailed, with\n        # no separate approval step required.\n        stored = rag_module.get_all_po_requests()\n        final_record = next(r for r in stored if r[\"id\"] == record[\"id\"])\n>       assert final_record[\"vendor_notified\"] is True\nE       assert False is True\n\ntests\\test_02_agent_actions.py:312: AssertionError"
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_apply_po_over_budget_limit_is_blocked_and_not_stored",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "edge_case",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 0.0003,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_approve_already_rejected_po_request_fails",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 4.3277,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_send_mail_actually_invokes_fake_smtp_sendmail",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.0007,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_send_mail_with_no_recipient_fails_without_hitting_smtp",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 0.0002,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_search_mail_returns_only_the_matching_message",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.0022,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_search_mail_with_no_keyword_match_returns_no_evidence",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 0.0017,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_schedule_meeting_writes_event_that_is_then_found",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent"
+      ],
+      "outcome": "passed",
+      "duration": 0.0174,
+      "message": null
+    },
+    {
+      "nodeid": "tests/test_02_agent_actions.py::test_schedule_meeting_fails_cleanly_when_not_configured",
+      "suite": "test_02_agent_actions",
+      "markers": [
+        "agent",
+        "failure"
+      ],
+      "outcome": "passed",
+      "duration": 0.0003,
+      "message": null
+    }
+  ]
+}

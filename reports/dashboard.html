@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NOVA Agent Evaluation Dashboard</title>
+<style>
+  :root { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  body { margin: 0; background: #f4f5f7; color: #1a1a1a; }
+  header { background: #14213d; color: white; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header .meta { opacity: 0.75; font-size: 13px; margin-top: 4px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 32px 64px; }
+  section { margin-bottom: 36px; }
+  h2 { font-size: 16px; text-transform: uppercase; letter-spacing: 0.04em;
+        color: #444; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px; }
+  .cards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .card { background: white; border-radius: 10px; padding: 16px;
+           box-shadow: 0 1px 3px rgba(0,0,0,0.08); text-align: center; }
+  .card-label { font-size: 12px; color: #777; text-transform: uppercase; }
+  .card-value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+  .delta { font-size: 12px; display: block; margin-top: 2px; }
+  .delta.up { color: #2e7d32; }
+  .delta.down { color: #c62828; }
+  .delta.neutral { color: #999; }
+  .banner { padding: 12px 16px; border-radius: 8px; font-weight: 600; margin-bottom: 12px; }
+  .banner.ok { background: #e8f5e9; color: #2e7d32; }
+  .banner.bad { background: #fdecea; color: #c62828; }
+  .banner.neutral { background: #eef1f5; color: #555; font-weight: 400; }
+  table.data-table { width: 100%; border-collapse: collapse; background: white;
+                       border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  table.data-table th, table.data-table td { text-align: left; padding: 10px 12px;
+                       border-bottom: 1px solid #eee; font-size: 13px; vertical-align: top; }
+  table.data-table th { background: #fafafa; color: #555; }
+  .bar-track { background: #eee; border-radius: 4px; height: 8px; width: 120px; overflow: hidden; }
+  .bar-fill { height: 100%; }
+  pre.msg { white-space: pre-wrap; margin: 0; font-size: 11px; color: #c62828;
+             max-height: 120px; overflow-y: auto; }
+  .metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .metric-card { background: white; border-radius: 10px; padding: 16px;
+                  box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .metric-label { font-size: 12px; color: #777; text-transform: uppercase; font-weight: 600; }
+  .metric-value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .metric-sub { font-size: 12px; color: #555; margin-top: 4px; }
+  .metric-desc { font-size: 12px; color: #888; margin-top: 8px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>NOVA Agent Evaluation Dashboard</h1>
+  <div class="meta">Run: 2026-08-30T22:33:21 &nbsp;|&nbsp;
+    Total duration: 56.42s &nbsp;|&nbsp;
+    Exit status: 0</div>
+</header>
+<main>
+  <section>
+    
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Total tests</div>
+        <div class="card-value">250</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Pass rate</div>
+        <div class="card-value" style="color:#2e7d32">100.0%</div>
+        <span class="delta up">▲ 0.5%</span>
+      </div>
+      <div class="card">
+        <div class="card-label">Failed</div>
+        <div class="card-value" style="color:#2e7d32">0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Skipped</div>
+        <div class="card-value">0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Avg duration</div>
+        <div class="card-value">0.1858s</div>
+      </div>
+      <div class="card">
+        <div class="card-label">p95 duration</div>
+        <div class="card-value">0.0304s</div>
+      </div>
+    </div>
+    
+  </section>
+
+  <section>
+    <h2>Agent Evaluation Metrics</h2>
+    <div class="metric-cards">
+        <div class="metric-card">
+          <div class="metric-label">Routing Accuracy</div>
+          <div class="metric-value" style="color:#2e7d32">100.0%</div>
+          <span class="delta neutral">±0</span>
+          <div class="metric-sub">189/189 passed &middot; avg 0.0156s</div>
+          <div class="metric-desc">% of queries where the correct agent was selected</div>
+        </div>
+        
+        <div class="metric-card">
+          <div class="metric-label">Agent Action Success Rate</div>
+          <div class="metric-value" style="color:#2e7d32">100.0%</div>
+          <span class="delta up">▲ 5.0%</span>
+          <div class="metric-sub">20/20 passed &middot; avg 0.7568s</div>
+          <div class="metric-desc">% of agent actions (apply/approve/reject/send/schedule) that produced the correct result</div>
+        </div>
+        
+        <div class="metric-card">
+          <div class="metric-label">Cross-System Validation Rate</div>
+          <div class="metric-value" style="color:#2e7d32">100.0%</div>
+          <span class="delta neutral">±0</span>
+          <div class="metric-sub">15/15 passed &middot; avg 1.6163s</div>
+          <div class="metric-desc">% of agent-to-agent / cross-system checks (Leave↔PO↔Calendar) that passed</div>
+        </div>
+        
+        <div class="metric-card">
+          <div class="metric-label">Failure-Handling Correctness</div>
+          <div class="metric-value" style="color:#2e7d32">100.0%</div>
+          <span class="delta neutral">±0</span>
+          <div class="metric-sub">32/32 passed &middot; avg 0.4677s</div>
+          <div class="metric-desc">% of failure scenarios (timeout, unavailable agent, invalid data, permission) handled gracefully</div>
+        </div>
+        </div>
+  </section>
+
+  <section>
+    <h2>Regression Check</h2>
+    <div class="banner ok">✅ No regressions - every test that passed last run still passes.</div>
+  </section>
+
+  <section>
+    <h2>By Test Category</h2>
+    <table class="data-table">
+      <thead><tr><th>Category</th><th>Total</th><th>Passed</th><th>Failed</th><th>Pass Rate</th><th>Avg Duration</th><th></th></tr></thead>
+      <tbody>
+        <tr>
+          <td>(unmarked)</td>
+          <td>11</td>
+          <td>11</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.3722s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>a2a</td>
+          <td>15</td>
+          <td>15</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>1.6163s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>agent</td>
+          <td>20</td>
+          <td>20</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.7568s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>edge_case</td>
+          <td>31</td>
+          <td>31</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.4167s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>failure</td>
+          <td>32</td>
+          <td>32</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.4677s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>parametrize</td>
+          <td>159</td>
+          <td>159</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.0011s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>regression</td>
+          <td>1</td>
+          <td>1</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.0256s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>routing</td>
+          <td>189</td>
+          <td>189</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.0156s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>slow</td>
+          <td>1</td>
+          <td>1</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.0004s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>By Suite / Agent</h2>
+    <table class="data-table">
+      <thead><tr><th>Suite</th><th>Total</th><th>Passed</th><th>Failed</th><th>Pass Rate</th><th>Avg Duration</th><th></th></tr></thead>
+      <tbody>
+        <tr>
+          <td>test_00_harness_smoke</td>
+          <td>11</td>
+          <td>11</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.3722s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>test_01_routing</td>
+          <td>189</td>
+          <td>189</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.0156s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>test_02_agent_actions</td>
+          <td>20</td>
+          <td>20</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.7568s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>test_03_failure_scenarios</td>
+          <td>20</td>
+          <td>20</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>0.0013s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        
+        <tr>
+          <td>test_04_a2a_cross_system</td>
+          <td>10</td>
+          <td>10</td>
+          <td>0</td>
+          <td>100.0%</td>
+          <td>2.424s</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:100%;background:#2e7d32"></div></div></td>
+        </tr>
+        </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Failures</h2>
+    <div class="banner ok">✅ No failing tests in this run.</div>
+  </section>
+</main>
+</body>
+</html>
