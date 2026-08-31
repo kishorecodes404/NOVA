@@ -46,14 +46,28 @@ if str(PROJECT_ROOT) not in sys.path:
 
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
 os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
-# Make sure no real mail/calendar config leaks in from the
-# developer's own shell into the test run.
+# Make sure no real mail/calendar/approver config leaks in from the
+# developer's own .env into the test run.
+#
+# IMPORTANT: set these to "" rather than popping them. app.py calls
+# load_dotenv() during `import app` (which happens inside the
+# app_module/rag_module fixtures below, AFTER this module-level code
+# runs). python-dotenv's load_dotenv() only skips a variable if it is
+# already PRESENT in os.environ (regardless of value) - a popped key
+# is treated as absent and gets silently refilled from the real
+# .env file, undoing this cleanup entirely and letting apply_leave()/
+# apply_po()/approve_*/reject_* make REAL smtplib.SMTP connections
+# (with a 20s timeout each) in every test that doesn't happen to use
+# the mock_mail fixture. Setting to "" survives load_dotenv() because
+# the key is still "present".
 for _leaky_var in (
     "NOVA_IMAP_HOST", "NOVA_IMAP_USER", "NOVA_IMAP_PASSWORD",
     "NOVA_SMTP_HOST", "NOVA_SMTP_USER", "NOVA_SMTP_PASSWORD",
     "NOVA_MEETINGS_ICS_PATH", "NOVA_MEETINGS_ICS_PATHS",
+    "NOVA_LEAVE_APPROVER_EMAIL", "NOVA_PO_APPROVER_EMAIL",
+    "NOVA_EXPENSE_APPROVER_EMAIL",
 ):
-    os.environ.pop(_leaky_var, None)
+    os.environ[_leaky_var] = ""
 
 
 @pytest.fixture(scope="session")
