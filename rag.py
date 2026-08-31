@@ -3643,14 +3643,19 @@ def apply_po(user, vendor, department, items, justification="", force=False, ven
         "total_amount": total_amount,
         "justification": justification,
         "due_date": str(due_date_clean) if due_date_clean else None,
-        "status": "auto_approved" if auto_approve else "pending",
+        # Always stored as "pending" here, even when auto-approval
+        # applies below - approve_po_request() is what actually flips
+        # it to "approved" and sends the vendor email, and it refuses
+        # to act on anything that isn't "pending". Storing this as
+        # "auto_approved" up front used to make approve_po_request()
+        # immediately reject itself ("That request is already
+        # auto_approved."), so an auto-approved PO's vendor was
+        # silently never notified.
+        "status": "pending",
         "requested_at": now,
         "vendor_notified": False,
         "email_status": "pending_approval",
     }
-
-    if auto_approve:
-        request_record["approved_at"] = now
 
     store["requests"].append(request_record)
 

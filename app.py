@@ -6102,7 +6102,7 @@ def render_dashboard_view():
     if run_clicked:
         with st.spinner("Running full test suite (pytest tests/ -v)..."):
             pytest_result = subprocess.run(
-                [sys.executable, "-m", "pytest", "tests/", "-q", "-p", "no:cacheprovider"],
+                [sys.executable, "-m", "pytest", "tests/", "-v"],
                 cwd=project_root,
                 capture_output=True,
                 text=True,
