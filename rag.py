@@ -699,6 +699,19 @@ def retrieve_context(question, number_of_results=4):
 # WEB SEARCH (WEB AGENT)
 # ============================================================
 
+# In-memory cache for non-time-sensitive web_search() results - see
+# the "Caching" note in web_search()'s docstring. Module-level dict
+# rather than functools.lru_cache since we need a TTL (an lru_cache
+# entry never expires on its own) and this is shared across the
+# ThreadPoolExecutor workers that call web_search() concurrently,
+# hence the lock.
+import threading as _threading
+
+_WEB_SEARCH_CACHE = {}
+_WEB_SEARCH_CACHE_LOCK = _threading.Lock()
+_WEB_SEARCH_CACHE_TTL_SECONDS = 600  # 10 minutes
+
+
 def _infer_timelimit(query):
     """
     Guess how fresh the results need to be, based on the question.
@@ -731,6 +744,17 @@ def web_search(query, max_results=6):
     Returns:
         context: formatted search result text
         sources: result URLs
+
+    Caching: results for queries with NO recency signal (see
+    _infer_timelimit() - "who is X", "capital of Y", etc.) are kept
+    in memory for a few minutes. Those are asked repeatedly within
+    a session ("who is X" then a follow-up about the same person)
+    and the answer doesn't change minute to minute, so a repeat
+    within the TTL skips DuckDuckGo entirely and returns instantly.
+    Anything with a recency signal ("today", "current", "price",
+    "news", ...) is NEVER cached - those need a fresh search every
+    time by definition, so caching them would risk serving a stale
+    price/score/headline.
     """
 
     import time
@@ -739,6 +763,22 @@ def web_search(query, max_results=6):
 
     timelimit = _infer_timelimit(query)
 
+    cache_key = (query.strip().lower(), max_results)
+
+    if timelimit is None:
+        with _WEB_SEARCH_CACHE_LOCK:
+            cached = _WEB_SEARCH_CACHE.get(cache_key)
+
+        if cached is not None:
+            cached_at, cached_context, cached_sources = cached
+            if time.perf_counter() - cached_at < _WEB_SEARCH_CACHE_TTL_SECONDS:
+                print(
+                    f"[WEB SEARCH] cache hit for {query!r} "
+                    f"({time.perf_counter() - cached_at:.0f}s old)",
+                    flush=True,
+                )
+                return cached_context, cached_sources
+
     results = []
     max_attempts = 3
 
@@ -746,7 +786,12 @@ def web_search(query, max_results=6):
 
         try:
 
-            with DDGS() as ddgs:
+            # Explicit timeout (the underlying HTTP client's default
+            # is considerably longer) so a slow/misbehaving backend
+            # fails fast and falls into the retry loop below instead
+            # of silently eating most of the "who is" query's budget
+            # on one hung request.
+            with DDGS(timeout=6) as ddgs:
 
                 search_results = ddgs.text(
                     query,
@@ -886,6 +931,14 @@ CONTENT:
         + context,
         flush=True,
     )
+
+    if timelimit is None:
+        with _WEB_SEARCH_CACHE_LOCK:
+            _WEB_SEARCH_CACHE[cache_key] = (
+                time.perf_counter(),
+                context,
+                sources,
+            )
 
     return context, sources
 # ============================================================

@@ -61,6 +61,7 @@ from rag import (
     get_leave_balances,
     get_leave_history,
     get_all_leave_requests,
+    get_pending_leave_requests,
     clear_leave_requests,
     validate_po_request,
     apply_po,
@@ -203,8 +204,35 @@ LOCAL_MODEL_NAME = "qwen2.5:1.5b"
 # was answering ungrounded. 2048 gives real headroom.
 LOCAL_MODEL_NUM_CTX = 2048
 
-@st.cache_resource
-def warm_up_ollama():
+# ---------------------------------------------------
+# Background model warm-up
+#
+# This USED to run via @st.cache_resource, called from inside
+# main() (see below). @st.cache_resource does guarantee the
+# actual POST calls only ever run once per server process - but
+# it still runs them SYNCHRONOUSLY, on whichever script run
+# happens to call it first. In practice that's the user's first
+# message, so the very first turn paid the full cold-load cost
+# (pulling ROUTER_MODEL + ANSWER_MODEL + the embedding model into
+# VRAM - 60s+ on modest hardware) before generating anything,
+# which is exactly the "first hi took 68s" symptom. Every turn
+# after that was fast because the models were already resident -
+# there was never a per-turn cost, just a misplaced one-time cost.
+#
+# Fire the same work in a background thread at MODULE IMPORT
+# time instead - i.e. the instant `streamlit run app.py` starts
+# the process, not the instant a user sends a message. That lets
+# the cold-load overlap with the user opening the page and typing
+# their first message instead of blocking on it. Still runs
+# exactly once per server process (guarded by _warmup_done, not
+# by cache_resource) and is shared across all sessions, same as
+# before.
+# ---------------------------------------------------
+
+_warmup_done = threading.Event()
+
+
+def _run_warmup():
     for model in (ROUTER_MODEL, ANSWER_MODEL):
         try:
             OLLAMA_SESSION.post(
@@ -225,26 +253,27 @@ def warm_up_ollama():
         except Exception:
             pass
 
-
-@st.cache_resource
-def warm_up_embedding_model():
-    """
-    Load the embedding model at startup too, so the first
-    document-routed question doesn't pay a cold-load cost on
-    top of the chat model's.
-
-    Note: if the GPU can't hold both qwen2.5:1.5b and
-    qwen3-embedding:0.6b resident at the same time, Ollama will
-    still evict one to load the other on every DOCUMENT-routed
-    turn - this warm-up only helps the very first call, not the
-    ongoing swap. That needs a hardware/Ollama-config fix (see
-    OLLAMA_MAX_LOADED_MODELS / available VRAM), not app code.
-    """
+    # Load the embedding model too, so the first DOCUMENT-routed
+    # question doesn't pay a cold-load cost on top of the chat
+    # model's. Note: if the GPU can't hold both ROUTER_MODEL and
+    # the embedding model resident at the same time, Ollama will
+    # still evict one to load the other on every DOCUMENT-routed
+    # turn - this warm-up only helps the very first call, not the
+    # ongoing swap. That needs a hardware/Ollama-config fix (see
+    # OLLAMA_MAX_LOADED_MODELS / available VRAM), not app code.
     try:
         from rag import create_embedding
         create_embedding("warm up")
     except Exception:
         pass
+
+    _warmup_done.set()
+
+
+# Started at import time - before st.set_page_config(), before any
+# session exists - so loading is already underway while the page
+# is still rendering for the very first visitor.
+threading.Thread(target=_run_warmup, daemon=True).start()
 
 SYSTEM_INSTRUCTION = """
 You are NOVA, a helpful and thoughtful AI assistant.
@@ -1658,13 +1687,34 @@ Examples of PLAN requests:
 - Check my calendar and inbox for anything about the client visit.
 - Before I submit this expense, check if there's a pending PO for the same vendor and any related emails.
 
+RECOMMEND
+Use RECOMMEND ONLY when the user wants NOVA to look across their
+OWN data (pending POs/leave/expenses, upcoming meetings, recent
+mail) and surface a short list of things worth their attention,
+with a reason for each. Do NOT use RECOMMEND for a general
+real-world recommendation request (a restaurant, a product, a
+movie, a place to visit) that has nothing to do with this app's
+own data - those are WEB (if they need current/specific
+real-world facts) or CHAT, exactly as they would be without this
+category existing.
+
+Examples of RECOMMEND requests:
+- What should I focus on today?
+- What's pending for me right now / catch me up.
+- What needs my attention right now?
+
+Examples that are NOT RECOMMEND (use WEB or CHAT instead):
+- Recommend a good place to eat nearby.
+- Recommend a laptop under a given budget.
+- What's a good book to read?
+
 WEB
 Use WEB when the user needs a SPECIFIC, real-world fact that can
 change over time - a person's current role, a company, an event,
 a date, a price, breaking news, etc.
 
 Examples of WEB questions:
-- Who is the wife of Virat Kohli?
+- Who is the spouse of a well-known public figure?
 - Who is the current CEO of Microsoft?
 - When was Apple founded?
 - What is the latest news about NVIDIA?
@@ -1724,6 +1774,7 @@ LEAVE_REQUEST
 PO_REQUEST
 EXPENSE_REQUEST
 PLAN
+RECOMMEND
 WEB
 CHAT
 
@@ -1785,12 +1836,13 @@ STARTER_SUGGESTIONS = [
 #     onto this one before searching" logic (further down).
 #
 # These two used to keep their own independent copies of this same
-# check. That's how a bug like "who is lewis hamilton" -> "what
-# team is he driving for currently" happened: the word-count cap
-# was 6 (this question is 7 words) and the referential-pronoun list
-# didn't include "he"/"she"/"him"/"her" at all - so the *first*
-# copy of the check (inside route_query) fell through to the small
-# 1.5B LLM router, which misread the question as a PO request.
+# check. That's how a bug like "who is a certain racing driver" ->
+# "what team is he driving for currently" happened: the word-count
+# cap was 6 (this question is 7 words) and the referential-pronoun
+# list didn't include "he"/"she"/"him"/"her" at all - so the
+# *first* copy of the check (inside route_query) fell through to
+# the small 1.5B LLM router, which misread the question as a PO
+# request.
 #
 # Even after tightening one copy, having two meant they could drift
 # out of sync again: route_query() might correctly decide "this is
@@ -2019,6 +2071,52 @@ def route_query(question, conversation_history=""):
     if planning_agent.looks_like_plan_request(question):
         log_timing("route_query -> 'PLAN' (fast, compound request)")
         return "PLAN"
+
+    # =========================================================
+    # FAST RECOMMENDATION ROUTING
+    #
+    # "What should I do today", "what needs my attention", "catch
+    # me up" - a request to look across NOVA's own data (pending
+    # POs/leave/expenses, upcoming meetings, recent mail) and
+    # surface a short, EXPLAINED list of things worth the user's
+    # attention. Checked after PLAN above (a true compound
+    # checklist request like "check my meetings and POs before I go
+    # on leave" is still PLAN, not this) and before every
+    # single-agent fast path below.
+    #
+    # Every phrase here is anchored to the user's OWN day/tasks/
+    # attention ("my priorities", "what should I do", "pending for
+    # me") - deliberately NOT a bare "recommend"/"suggest" match.
+    # That was tried and immediately misfired on ordinary
+    # general-knowledge recommendation requests (a restaurant, a
+    # product) - neither has anything to do with this app's own
+    # data, so RECOMMEND answered as if it had checked mail/POs and
+    # found nothing, instead of just answering the question. Those
+    # belong to WEB/CHAT like any other real-world recommendation
+    # question - only requests that are actually about the user's
+    # own pending items/schedule/mail land here.
+    # =========================================================
+
+    recommend_signals = [
+        "what should i do today", "what should i focus on",
+        "what should i prioritize", "what needs my attention",
+        "what's pending for me", "whats pending for me",
+        "anything i should know", "anything i should look at",
+        "my priorities", "top priorities", "action items",
+        "daily briefing", "my briefing", "catch me up",
+        "suggest what i should do", "what should i work on",
+    ]
+
+    if any(signal in q for signal in recommend_signals):
+        log_timing("route_query -> 'RECOMMEND' (fast, phrase)")
+        return "RECOMMEND"
+
+    if re.match(
+        r"^what should i (do|focus on|prioritize|handle|look at|work on)\b",
+        q,
+    ):
+        log_timing("route_query -> 'RECOMMEND' (fast, what should i...)")
+        return "RECOMMEND"
 
     # =========================================================
     # FAST SEND-MAIL ROUTING
@@ -2367,6 +2465,9 @@ def route_query(question, conversation_history=""):
 
     if "PLAN" in label:
         return "PLAN"
+
+    if "RECOMMEND" in label:
+        return "RECOMMEND"
 
     # Checked before the plain MAIL/MEETING checks below, since
     # "SEND_MAIL" and "SCHEDULE_MEETING" both contain those
@@ -4136,6 +4237,118 @@ def _format_expense_evidence(question):
     return "\n\n====================\n\n".join(chunks), sources
 
 
+# =========================================================
+# RECOMMENDATION AGENT
+#
+# Looks across NOVA's own data - pending POs/leave/expenses,
+# upcoming meetings, recent mail, leave balance - and produces a
+# short list of things worth the user's attention, each with a
+# reason attached.
+#
+# Every candidate below is computed in plain Python from real data
+# (same "deterministic evidence, LLM only phrases it" approach as
+# PLAN's leave-impact verdict) - the WHY is never left to the model
+# to invent. If nothing is found anywhere, the evidence block below
+# is empty and the RECOMMEND prompt (see build_routed_prompt()) is
+# told to say so honestly instead of manufacturing a recommendation.
+# =========================================================
+
+def _gather_recommendation_evidence():
+    """
+    Returns (context, sources) - a formatted evidence block built
+    from every read-only agent this app already has, scoped to the
+    current user ("me"), and a matching list of short source labels
+    for the UI's Sources expander.
+    """
+
+    chunks, sources = [], []
+
+    # ---- Pending approvals waiting on the user ----
+
+    for request in get_pending_po_requests():
+        if request.get("requester") != _po_user_key_safe("me"):
+            continue
+        chunks.append(
+            f"PENDING PO {request.get('id', '?')}\n"
+            f"VENDOR: {request.get('vendor', 'N/A')}\n"
+            f"DUE DATE: {request.get('due_date', 'N/A')}\n"
+            f"REQUESTED AT: {request.get('requested_at', 'N/A')}"
+        )
+        sources.append(
+            f"Pending PO - {request.get('vendor', 'N/A')} "
+            f"(due {request.get('due_date', 'N/A')})"
+        )
+
+    for request in get_pending_leave_requests():
+        if request.get("user") != _po_user_key_safe("me"):
+            continue
+        chunks.append(
+            f"PENDING LEAVE REQUEST {request.get('id', '?')}\n"
+            f"TYPE: {request.get('leave_type', 'N/A')}\n"
+            f"DATES: {request.get('start', 'N/A')} to {request.get('end', 'N/A')}"
+        )
+        sources.append(
+            f"Pending leave - {request.get('leave_type', 'N/A')} "
+            f"{request.get('start', 'N/A')} to {request.get('end', 'N/A')}"
+        )
+
+    for request in get_pending_expense_requests():
+        if request.get("requester") != _po_user_key_safe("me"):
+            continue
+        chunks.append(
+            f"PENDING EXPENSE CLAIM {request.get('id', '?')}\n"
+            f"CATEGORY: {request.get('category', 'N/A')}\n"
+            f"AMOUNT: {request.get('amount', 'N/A')}"
+        )
+        sources.append(
+            f"Pending expense - {request.get('category', 'N/A')} "
+            f"{request.get('amount', 'N/A')}"
+        )
+
+    # ---- Low leave balance (< 2 days on any leave type) ----
+
+    for leave_type, days in get_leave_balances("me").items():
+        try:
+            if float(days) < 2:
+                chunks.append(
+                    f"LOW LEAVE BALANCE\n"
+                    f"TYPE: {leave_type}\n"
+                    f"DAYS REMAINING: {days}"
+                )
+                sources.append(f"Low balance - {leave_type} ({days} day(s) left)")
+        except (TypeError, ValueError):
+            continue
+
+    # ---- Meetings in the next 3 days ----
+
+    try:
+        today = datetime.now().date()
+        upcoming = get_events_in_range(today, today + timedelta(days=3))
+    except Exception:
+        upcoming = []
+
+    if upcoming:
+        chunks.append(
+            "UPCOMING MEETINGS (next 3 days)\n" + "\n".join(upcoming[:10])
+        )
+        sources.append(f"{len(upcoming)} upcoming meeting(s) in the next 3 days")
+
+    # ---- Recent mail (no keyword -> falls back to most recent) ----
+
+    try:
+        mail_context, mail_sources = search_mail(
+            "", max_results=5, require_keyword_match=False
+        )
+    except Exception:
+        mail_context, mail_sources = "", []
+
+    if mail_context:
+        chunks.append("RECENT MAIL\n" + mail_context)
+        sources.extend(mail_sources[:5])
+
+    return "\n\n====================\n\n".join(chunks), sources
+
+
 def _extract_plan_date_window(question):
     """
     Best-effort (start_date, end_date) implied by a compound request
@@ -4354,7 +4567,7 @@ def _get_topic_anchor_question(previous_route):
     Recovers the question that actually introduced the CURRENT
     topic - not just the single previous turn.
 
-    A chain of pronoun-only follow-ups ("who is cristiano ronaldo"
+    A chain of pronoun-only follow-ups ("who is a certain athlete"
     -> "what country does HE play for" -> "how many trophies does
     HE hold" -> "who is HIS wife") never re-states the subject's
     name after the very first turn. Prefixing only the immediately
@@ -4408,8 +4621,8 @@ def _resolve_web_search_query(question):
     web_search() (DuckDuckGo) only ever sees the literal question
     text passed to it - it has no conversation history of its own.
     That's fine for a self-contained question, but for a short
-    pronoun follow-up ("is he alive" after "who is ayrton senna")
-    it means DuckDuckGo is searching for literally "is he alive",
+    pronoun follow-up ("is he alive" after "who is a certain
+    historical figure") it means DuckDuckGo is searching for literally "is he alive",
     which returns nothing useful about the actual subject - even
     though route_query() correctly re-routes the follow-up to WEB
     by inheriting the previous turn's route (see its "fast,
@@ -4664,7 +4877,7 @@ def build_routed_prompt(question, conversation_history):
     )
 
     # Expand pronoun follow-ups ("is he alive") into a standalone
-    # query ("who is ayrton senna is he alive") before they ever hit
+    # query ("who is <subject> is he alive") before they ever hit
     # DuckDuckGo - see _resolve_web_search_query()'s docstring. Done
     # here, before routing, since this speculative call fires before
     # route_query() has even run.
@@ -5020,6 +5233,28 @@ def build_routed_prompt(question, conversation_history):
         )
 
     # =========================================================
+    # RECOMMENDATION AGENT
+    #
+    # Not speculative like WEB/DOCUMENT above - it reads across
+    # several local stores (PO/leave/expense/meetings/mail), so
+    # only pay that cost when the route actually resolves here.
+    # =========================================================
+
+    elif route == "RECOMMEND":
+
+        try:
+            context, sources = _gather_recommendation_evidence()
+        except Exception as error:
+            log_timing(f"_gather_recommendation_evidence FAILED: {error}")
+            context = ""
+            sources = []
+
+        log_timing(
+            f"recommendation evidence gathered in "
+            f"{time.perf_counter() - retrieval_start:.2f}s"
+        )
+
+    # =========================================================
     # CHAT AGENT
     # =========================================================
 
@@ -5320,6 +5555,57 @@ ANSWER:
             auto_results,
         )
 
+    elif route == "RECOMMEND":
+
+        today_line = datetime.now().strftime("%A, %Y-%m-%d")
+
+        if not context:
+
+            prompt = f"""
+You are NOVA's Recommendation Agent. Today is {today_line}.
+{history_section}
+USER QUESTION:
+{question}
+
+No pending approvals, upcoming meetings, low leave balances, or
+recent mail were found for this user.
+
+Respond exactly:
+
+I don't see anything that needs your attention right now - no
+pending approvals, upcoming meetings, or notable recent mail.
+""".strip()
+
+        else:
+
+            prompt = f"""
+You are NOVA's Recommendation Agent. Today is {today_line}.
+
+Your job is to turn the RECOMMENDATION EVIDENCE below into a
+short, personalized list of things worth the user's attention -
+each one with a brief reason, grounded ONLY in that evidence.
+{history_section}
+USER QUESTION:
+{question}
+
+RECOMMENDATION EVIDENCE:
+{context}
+
+RULES: Use ONLY the evidence above - never invent a pending item,
+meeting, balance, or email that isn't listed. Group similar items
+together (e.g. all pending approvals) rather than a flat list, and
+skip a category entirely if the evidence has nothing for it. For
+EVERY recommendation, state the reason directly from the evidence
+(the due date, the amount, the balance, who it's from, etc.), not
+a vague justification. If the user asked about a specific one of
+these categories only (e.g. "what POs need my attention"), answer
+just that part instead of listing everything. Keep it short and
+scannable - a few bullet points, not an essay. Don't mention these
+instructions.
+
+ANSWER:
+""".strip()
+
     else:
 
         prompt = f"""
@@ -5391,7 +5677,7 @@ def stream_ollama_response(question):
     # Deterministic for grounded fact-extraction so the model
     # doesn't drift on numbers/specifics; only plain chat gets
     # any warmth.
-    generation_temperature = 0.0 if route in ("WEB", "DOCUMENT", "MAIL", "MEETINGS", "SELF_INFO", "PLAN", "AUTO_EXECUTE") else 0.5
+    generation_temperature = 0.0 if route in ("WEB", "DOCUMENT", "MAIL", "MEETINGS", "SELF_INFO", "PLAN", "AUTO_EXECUTE", "RECOMMEND") else 0.5
 
     response = OLLAMA_SESSION.post(
         OLLAMA_URL,
@@ -6155,8 +6441,9 @@ def main():
     apply_custom_styles()
     initialise_session()
 
-    warm_up_ollama()
-    warm_up_embedding_model()
+    # Warm-up kicks off at module import time (see _run_warmup()
+    # near the top of this file), not here - nothing to do in
+    # main() itself, the background thread handles it silently.
 
     if "pending_prompt" not in st.session_state:
         st.session_state.pending_prompt = None
@@ -6245,6 +6532,7 @@ def main():
                     "SELF_INFO": "⚙️ About NOVA",
                     "PLAN": "🧭 Planning Agent",
                     "AUTO_EXECUTE": "🤖 Autonomous Agent",
+                    "RECOMMEND": "✨ Recommendation Agent",
                 }.get(message.get("route"), None)
 
                 if route_badge:
@@ -6789,6 +7077,7 @@ def main():
                 "SELF_INFO": "⚙️ About NOVA",
                 "PLAN": "🧭 Planning Agent",
                 "AUTO_EXECUTE": "🤖 Autonomous Agent",
+                "RECOMMEND": "✨ Recommendation Agent",
             }.get(
                 st.session_state.get("last_route"),
                 None,
