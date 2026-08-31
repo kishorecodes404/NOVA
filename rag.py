@@ -1644,7 +1644,21 @@ def search_meetings(query, max_results=5, days_behind=7, days_ahead=30, user=Non
     if not events:
         return "", []
 
-    events.sort(key=lambda e: (-e[0], e[1]))
+    # Prefer future/ongoing events over past ones. A plain relevance
+    # sort (score, then earliest-first) meant a single past match
+    # with no future counterpart - e.g. one Kishore meeting 3 days
+    # ago and nothing upcoming - won here, and got returned with no
+    # signal it had already happened. "when do I have a meeting with
+    # X" implicitly means "next", so: highest keyword score first,
+    # then future events before past ones, then nearest date within
+    # each group (soonest upcoming, or most-recent past first).
+    events.sort(
+        key=lambda e: (
+            -e[0],
+            e[1] < now,
+            e[1] if e[1] >= now else -e[1].timestamp(),
+        )
+    )
     top_events = events[:max_results]
 
     # Only label events with whose calendar they came from once
@@ -1657,16 +1671,21 @@ def search_meetings(query, max_results=5, days_behind=7, days_ahead=30, user=Non
 
     for _, start_naive, summary, location, description in top_events:
 
+        # Explicit so the answer model never states a PAST event as
+        # if it were still coming up (or vice versa) - it has to
+        # read this rather than infer tense from a bare date.
+        time_status = "PAST" if start_naive < now else "UPCOMING"
+
         chunks.append(
             f"""EVENT {len(chunks) + 1}{(' - CALENDAR: ' + calendar_user) if owner_label else ''}
 TITLE: {summary}
-WHEN: {start_naive.strftime('%Y-%m-%d %H:%M')}
+WHEN: {start_naive.strftime('%Y-%m-%d %H:%M')} ({time_status})
 LOCATION: {location or 'N/A'}
 DETAILS:
 {description[:400]}"""
         )
         sources.append(
-            f"{summary} ({start_naive.strftime('%Y-%m-%d %H:%M')}){owner_label}"
+            f"{summary} ({start_naive.strftime('%Y-%m-%d %H:%M')}, {time_status}){owner_label}"
         )
 
     context = "\n\n====================\n\n".join(chunks)

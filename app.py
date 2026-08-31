@@ -1484,10 +1484,26 @@ def stream_response(api_key, model_name, question):
     # RECOMMEND only: buffer + verify against the exact evidence
     # before anything reaches the caller (see
     # _stream_with_recommendation_grounding). Every other route
-    # streams through unchanged.
+    # streams through unchanged. On a failed grounding check,
+    # regenerate_recommendation_once does ONE blocking, non-streamed
+    # retry against Gemini with a corrective prompt, before the
+    # wrapper falls back to the safe message.
     recommendation_evidence = st.session_state.get("last_recommendation_evidence")
+
+    def regenerate_recommendation_once(previous_attempt, unverified_terms):
+        retry_prompt = _build_recommendation_retry_prompt(
+            prompt, previous_attempt, unverified_terms
+        )
+        retry_response = client.models.generate_content(
+            model=model_name,
+            contents=[{"role": "user", "parts": [{"text": retry_prompt}]}],
+            config={"system_instruction": SYSTEM_INSTRUCTION},
+        )
+        return retry_response.text or ""
+
     yield from _stream_with_recommendation_grounding(
-        _raw_tokens(), route, recommendation_evidence
+        _raw_tokens(), route, recommendation_evidence,
+        regenerate_fn=regenerate_recommendation_once,
     )
 
     log_timing(
@@ -1593,10 +1609,40 @@ def groq_stream_response(api_key, model_name, question):
     # RECOMMEND only: buffer + verify against the exact evidence
     # before anything reaches the caller (see
     # _stream_with_recommendation_grounding). Every other route
-    # streams through unchanged.
+    # streams through unchanged. On a failed grounding check,
+    # regenerate_recommendation_once does ONE blocking, non-streamed
+    # retry against Groq with a corrective prompt, before the
+    # wrapper falls back to the safe message.
     recommendation_evidence = st.session_state.get("last_recommendation_evidence")
+
+    def regenerate_recommendation_once(previous_attempt, unverified_terms):
+        retry_prompt = _build_recommendation_retry_prompt(
+            prompt, previous_attempt, unverified_terms
+        )
+        retry_response = GROQ_SESSION.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model_name,
+                "messages": [{"role": "user", "content": retry_prompt}],
+                "stream": False,
+            },
+            timeout=60,
+        )
+        retry_response.raise_for_status()
+        return (
+            retry_response.json()
+            .get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+        )
+
     yield from _stream_with_recommendation_grounding(
-        _raw_tokens(), route, recommendation_evidence
+        _raw_tokens(), route, recommendation_evidence,
+        regenerate_fn=regenerate_recommendation_once,
     )
 
     log_timing(
@@ -2130,11 +2176,36 @@ def route_query(question, conversation_history=""):
         "suggest what i should do", "what should i work on",
     ]
 
-    if any(signal in q for signal in recommend_signals):
+    # A "what should I ..." question can still be about ONE specific,
+    # named item ("what should I focus on regarding my meeting with
+    # Alex tomorrow?") rather than a general sweep of everything
+    # pending. Those belong to the specific-item agent below (MEETINGS,
+    # MAIL, etc.), which can actually look the named thing up and give
+    # an honest, grounded answer - including "there's no such meeting"
+    # if it doesn't exist. RECOMMEND's evidence has no per-person or
+    # per-subject lookup, so routing a question shaped like this to
+    # RECOMMEND instead means it can only ever guess at "Alex" (and
+    # get caught by the grounding check) or refuse outright - neither
+    # of which actually answers what was asked. Checked BEFORE the
+    # substring/regex matches below so it can veto them.
+    _specific_item_keywords = (
+        "meeting", "meetings", "call", "calls", "appointment",
+        "appointments", "email", "emails", "mail", "message",
+        "messages", " po ", "purchase order", "expense", "leave request",
+    )
+    _specific_reference_markers = (
+        " with ", " from ", " to ", " regarding ", " about ", " for my ",
+    )
+    is_specific_item_question = (
+        any(keyword in q for keyword in _specific_item_keywords)
+        and any(marker in q for marker in _specific_reference_markers)
+    )
+
+    if not is_specific_item_question and any(signal in q for signal in recommend_signals):
         log_timing("route_query -> 'RECOMMEND' (fast, phrase)")
         return "RECOMMEND"
 
-    if re.match(
+    if not is_specific_item_question and re.match(
         r"^what should i (do|focus on|prioritize|handle|look at|work on)\b",
         q,
     ):
@@ -4351,6 +4422,56 @@ def _days_since(timestamp_str):
         return None
 
 
+def _preference_evidence_line(preference, current_value, history_len, field_label, item_noun):
+    """
+    Returns (line_text, is_match) - an explicit HISTORY/PREFERENCE line
+    for a single stale request, covering all three honest outcomes:
+
+    1. No preference exists at all (not enough repeats in history) -
+       says so plainly, so the model has something true to report
+       instead of silently omitting any mention of history.
+    2. A preference exists but doesn't apply to THIS item - says so
+       plainly too, so the model never implies a pattern influenced
+       an item it actually has nothing to do with.
+    3. A preference exists AND matches this item - the only case
+       that should ever be described as having influenced priority.
+
+    This line is always attached (never conditionally omitted the
+    way the old preference_line was), so the RECOMMEND prompt can
+    require an honest history/preference statement on every genuine
+    recommendation, not just the ones where a match happens to exist.
+    """
+
+    current_value = (current_value or "").strip()
+
+    if preference is None:
+        return (
+            f"HISTORY/PREFERENCE: no repeated {field_label} pattern in your "
+            f"past {item_noun} history (fewer than 2 repeats) - no preference "
+            f"applies to this item.",
+            False,
+        )
+
+    pref_value, pref_count = preference
+
+    if current_value and current_value == pref_value:
+        return (
+            f"HISTORY/PREFERENCE MATCH: {pref_value} is your most-used "
+            f"{field_label} ({pref_count} of {history_len} past {item_noun} "
+            f"records) - this item matches that pattern, which is why it is "
+            f"ranked as higher priority.",
+            True,
+        )
+
+    return (
+        f"HISTORY/PREFERENCE: your most-used {field_label} is {pref_value} "
+        f"({pref_count} of {history_len} past {item_noun} records), but this "
+        f"item is {current_value or 'a different value'} instead - no "
+        f"preference pattern applies to this item.",
+        False,
+    )
+
+
 def _gather_recommendation_evidence():
     """
     Returns (context, sources) - a formatted evidence block built
@@ -4404,14 +4525,12 @@ def _gather_recommendation_evidence():
             )
 
         preference_line = ""
-        if (
-            is_stale and vendor_preference
-            and (request.get("vendor") or "").strip() == vendor_preference[0]
-        ):
-            preference_line = (
-                f"\nNOTE: {vendor_preference[0]} is your most-used vendor "
-                f"({vendor_preference[1]} of {len(po_history)} past POs)"
+        if is_stale:
+            pref_text, pref_match = _preference_evidence_line(
+                vendor_preference, request.get("vendor"), len(po_history),
+                "vendor", "PO",
             )
+            preference_line = f"\n{pref_text}"
 
         chunks.append(
             f"YOUR PO REQUEST {request.get('id', '?')}\n"
@@ -4445,14 +4564,12 @@ def _gather_recommendation_evidence():
             )
 
         preference_line = ""
-        if (
-            is_stale and leave_preference
-            and (request.get("leave_type") or "").strip() == leave_preference[0]
-        ):
-            preference_line = (
-                f"\nNOTE: {leave_preference[0]} is your most-requested leave "
-                f"type ({leave_preference[1]} of {len(leave_history)} past requests)"
+        if is_stale:
+            pref_text, pref_match = _preference_evidence_line(
+                leave_preference, request.get("leave_type"), len(leave_history),
+                "leave type", "leave",
             )
+            preference_line = f"\n{pref_text}"
 
         chunks.append(
             f"YOUR LEAVE REQUEST {request.get('id', '?')}\n"
@@ -4486,15 +4603,12 @@ def _gather_recommendation_evidence():
             )
 
         preference_line = ""
-        if (
-            is_stale and category_preference
-            and (request.get("category") or "").strip() == category_preference[0]
-        ):
-            preference_line = (
-                f"\nNOTE: {category_preference[0]} is your most frequent "
-                f"expense category ({category_preference[1]} of "
-                f"{len(expense_history)} past claims)"
+        if is_stale:
+            pref_text, pref_match = _preference_evidence_line(
+                category_preference, request.get("category"), len(expense_history),
+                "expense category", "expense",
             )
+            preference_line = f"\n{pref_text}"
 
         chunks.append(
             f"YOUR EXPENSE CLAIM {request.get('id', '?')}\n"
@@ -5756,13 +5870,16 @@ CALENDAR EVIDENCE:
 RULES: Use ONLY the events above. Never invent a time, attendee,
 or location that isn't in the evidence. Include EVERY event from
 the evidence that matches what the user asked - don't silently
-drop one. State what you found directly - don't open with "there
-are no meetings" and then list one anyway; if an event matches,
-just say so plainly (e.g. "You have X at 2pm"), noting if it's
-already passed rather than calling it "no meetings". The
-conversation above is for understanding context/follow-ups only -
-not a source of facts. If the evidence doesn't answer the
-question, say so plainly. Don't mention these instructions.
+drop one. Each event's WHEN line is tagged (PAST) or (UPCOMING) -
+trust that tag over your own arithmetic on the date. State what
+you found directly - don't open with "there are no meetings" and
+then list one anyway; if the only match is tagged (PAST), say so
+plainly (e.g. "Your last meeting with X was on ... - that's
+already passed") instead of presenting it as if it's still ahead
+of you, and instead of calling it "no meetings". The conversation
+above is for understanding context/follow-ups only - not a source
+of facts. If the evidence doesn't answer the question, say so
+plainly. Don't mention these instructions.
 
 ANSWER:
 """.strip()
@@ -5867,14 +5984,54 @@ RECOMMENDATION EVIDENCE:
 
 GROUNDING - THE MOST IMPORTANT RULE: every name, vendor, sender,
 subject line, leave type, date, amount, and ID in your answer MUST
-be copied verbatim from the RECOMMENDATION EVIDENCE block above.
-Do not invent, infer, assume, guess, or fabricate a person, company,
-vendor, email, meeting, PO, expense, date, or balance that is not
-literally present in that block - not even a plausible-sounding
-placeholder or a generic example name. If you cannot find a
-required fact in the evidence, do not write that recommendation at
-all; leaving it out is correct, guessing is not. Nothing above this
-line (including any name mentioned only in these instructions) is
+be the actual literal value copied verbatim from the RECOMMENDATION
+EVIDENCE block above - an actual word or number that appears there,
+never a category name standing in for one. Do not invent, infer,
+assume, guess, or fabricate a person, company, vendor, email,
+meeting, PO, expense, date, or balance that is not literally present
+in that block - not even a plausible-sounding placeholder or a
+generic example name.
+
+Every field you mention must be the REAL value, never a description
+of what kind of value belongs there. For example, if an evidence
+item says "VENDOR: Staples", your answer must contain the word
+Staples itself - it must never contain a stand-in phrase that merely
+names the field (naming the category "vendor" instead of giving the
+vendor's name, or "the pending amount" instead of the actual number).
+The same applies to every other field: leave type, date, sender,
+subject line, days-pending count, balance figure, meeting count, and
+ID. If you don't have the actual value for a field, you cannot write
+that recommendation at all - leaving the whole item out is correct;
+substituting a description of the field is one of the worst mistakes
+you can make here.
+
+NEVER write a bracketed placeholder like [Vendor Name], [Subject
+Line], [Leave Type], [Meeting Count], or [Meeting Duration] - these
+are field labels, not values, and writing one is always wrong even
+if you can't find the real value; drop the item instead. This
+applies with or without the brackets - writing the bare phrase
+"Meeting Count" or "Meeting Duration" as if it were a real number
+is the same mistake as writing it in brackets. NEVER write a generic placeholder-style name either (e.g. "XYZ Corp", "Acme
+Inc", "John Doe", "Company X") - if the real vendor/sender/name
+isn't literally present in the evidence, that recommendation cannot
+be written at all.
+
+WORKED EXAMPLE (values below are illustrative only, not your actual
+evidence - copy the FORMAT, never these specific words):
+Evidence contains: "YOUR PO REQUEST PO-104\nVENDOR: Staples\n...
+STATUS: pending 5 day(s), no response yet - MAY BE WORTH A
+FOLLOW-UP\nHISTORY/PREFERENCE MATCH: Staples is your most-used
+vendor (3 of 4 past PO records)..."
+Correct output for that item:
+1. **Follow up on your Staples PO.** It's been pending 5 days with
+no response, and Staples is your most-used vendor - worth a nudge.
+This is correct because "Staples" and "5 days" are copied literally
+from the evidence, not templated.
+
+If you cannot find a required fact in the evidence, do not write
+that recommendation at all; leaving it out is correct, guessing or
+templating is not. Nothing above this line (including any name
+mentioned only in these instructions or this worked example) is
 itself evidence - only text inside the RECOMMENDATION EVIDENCE block
 counts.
 
@@ -5896,6 +6053,13 @@ follow that literally, don't override it with your own judgment:
   a bullet point on its own; use it solely to add a sentence of
   support to a recommendation you're already making from a
   non-context item.
+- A "HISTORY/PREFERENCE MATCH" line means a real, repeated pattern
+  in the user's own past requests applies to THIS item and is part
+  of why it's prioritized - treat it as genuinely influencing rank,
+  not decoration. A plain "HISTORY/PREFERENCE" line (no "MATCH")
+  means no pattern applies here - say so plainly if you mention
+  history at all; never phrase it as if a pattern influenced the
+  item when this line says none does.
 
 FORMAT: Write each genuine recommendation (never a status-only or
 context-only item, and never one you couldn't fully ground per the
@@ -5905,7 +6069,10 @@ first, in this order:
    can block other people, so these come first.
 2. "MAY BE WORTH A FOLLOW-UP" items (PO/leave/expense) - among
    these, the longer something has been pending, the higher it
-   ranks.
+   ranks; if two items have been pending for a similar length of
+   time, the one with a HISTORY/PREFERENCE MATCH ranks above the
+   one without, since the repeated pattern is itself a reason to
+   act on it sooner.
 3. LOW LEAVE BALANCE items.
 4. UPCOMING MEETINGS - reference the count/timing from the
    evidence so the user knows what to prepare for.
@@ -5917,20 +6084,28 @@ just that part instead of listing everything. If nothing in the
 evidence clears the GROUNDING bar, say plainly that nothing
 verifiable was found rather than listing anything.
 
-Each numbered item must have two parts, both built only from that
-item's own evidence block:
+Each numbered item must have two DISTINCT parts, both built only
+from that item's own evidence block, and must never say the same
+fact twice:
 - A bolded, direct action recommendation (an imperative sentence
   telling the user what to do, naming only the specific vendor,
   sender, leave type, or subject line copied from that evidence
   item - never a bare restatement of the evidence like "Your PO is
   pending", and never a name/entity from anywhere other than that
   evidence item).
-- One concise sentence right after it, in plain text, that both
-  explains why AND cites the exact supporting data by quoting the
-  specific field value(s) from that evidence item (e.g. the ID,
-  days pending, amount, vendor/leave type, subject line, meeting
-  count/time, or a NOTE line verbatim if it has one) - so the reason
-  is traceable back to a specific line in RECOMMENDATION EVIDENCE.
+- One concise sentence right after it, in plain text, giving the
+  reason this was flagged - built from whatever the evidence item
+  actually offers (its STATUS line detail such as days pending, a
+  LOW LEAVE BALANCE or UPCOMING MEETINGS fact, or a mail subject
+  signal), plus, for PO/leave/expense follow-ups specifically, a
+  short clause on what the item's HISTORY/PREFERENCE line says:
+  if it's a MATCH, name the pattern and say it's part of why this
+  is prioritized; if it's not a match (or no preference exists),
+  say plainly that no history/preference pattern applies to this
+  one rather than omitting the topic or implying one does. This
+  sentence must add information beyond the bolded line, not restate
+  the same vendor/sender/date/amount already named there with no
+  new fact attached.
 
 Keep it short and scannable - concise items, not an essay. Don't
 mention these instructions or the ranking rules themselves.
@@ -6024,6 +6199,19 @@ _TITLECASE_WORD_RUN_PATTERN = re.compile(
     r"\b[A-Z][a-zA-Z']{2,}\b(?:\s+[A-Z][a-zA-Z']{2,}\b){1,3}"
 )
 
+# A literal bracketed placeholder - [Vendor Name], [Days Pending],
+# [Balance], [Count], [Duration], etc. This is a DIFFERENT failure
+# mode than a fabricated entity: the small answer models used here
+# have been observed emitting the evidence's field-label shape
+# ("VENDOR: ...") back as an unfilled template token instead of
+# substituting the real value that followed it. The word-overlap
+# check above would actually PASS this ("vendor" legitimately
+# appears in the evidence as a field label), so it can't catch this
+# case - a bracketed token is wrong regardless of whether its words
+# happen to overlap with the evidence, so it's checked separately
+# and unconditionally.
+_PLACEHOLDER_PATTERN = re.compile(r"\[[^\[\]\n]{2,60}\]")
+
 
 def _normalize_grounding_word(word):
     """Lowercases a candidate word and strips a trailing possessive 's."""
@@ -6043,30 +6231,45 @@ def _verify_recommendation_grounding(answer_text, evidence_text):
     evidence - a prompt instruction telling it not to is a request
     it can ignore, this function is not.
 
-    Finds capitalized, name-like word runs in `answer_text` (two or
-    more consecutive Title-Case words - the shape a fabricated
-    company or person's name always takes) and, after stripping out
-    ordinary connective/stylistic words via _GROUNDING_STOPWORDS,
-    checks whether ANY remaining content word in that run appears in
-    `evidence_text` - the exact RECOMMENDATION EVIDENCE that was
-    actually retrieved. A run is only flagged as unverified if NONE
-    of its content words are grounded - i.e. it names something with
-    zero connection to the real data, which is exactly what a fully
-    invented entity ("Acme Corp", "John Doe") looks like. A run that
-    mixes a real entity word (a vendor, a name, a subject fragment)
-    with an ordinary word that just isn't in the evidence (a verb
-    like "Renew", a generic noun like "Email") is intentionally NOT
-    flagged - requiring every single word in a natural-language
-    sentence to be a literal copy of the evidence would reject
-    correct answers just for being phrased in plain English instead
-    of parroting the evidence's field labels verbatim.
+    Two independent checks, either of which fails the whole answer:
+
+    1. Bracketed placeholders ([Vendor Name], [Days Pending], ...).
+       Checked first and unconditionally, because these are the
+       clearest possible sign the model templated a field label
+       instead of substituting a real value - no word-overlap
+       reasoning applies here; the mere presence of a bracket run
+       is disqualifying.
+
+    2. Finds capitalized, name-like word runs in `answer_text` (two
+       or more consecutive Title-Case words - the shape a fabricated
+       company or person's name always takes) and, after stripping
+       out ordinary connective/stylistic words via
+       _GROUNDING_STOPWORDS, checks whether ANY remaining content
+       word in that run appears in `evidence_text` - the exact
+       RECOMMENDATION EVIDENCE that was actually retrieved. A run is
+       only flagged as unverified if NONE of its content words are
+       grounded - i.e. it names something with zero connection to
+       the real data, which is exactly what a fully invented entity
+       ("Acme Corp", "John Doe") looks like. A run that mixes a real
+       entity word (a vendor, a name, a subject fragment) with an
+       ordinary word that just isn't in the evidence (a verb like
+       "Renew", a generic noun like "Email") is intentionally NOT
+       flagged - requiring every single word in a natural-language
+       sentence to be a literal copy of the evidence would reject
+       correct answers just for being phrased in plain English
+       instead of parroting the evidence's field labels verbatim.
 
     Returns (is_grounded: bool, unverified_terms: list[str]) - the
-    latter holds whole unverified runs, not individual words.
+    latter holds whole unverified runs/placeholders, not individual
+    words.
     """
 
+    unverified = [
+        match.group(0)
+        for match in _PLACEHOLDER_PATTERN.finditer(answer_text or "")
+    ]
+
     evidence_lower = (evidence_text or "").lower()
-    unverified = []
 
     for match in _TITLECASE_WORD_RUN_PATTERN.finditer(answer_text or ""):
         run_text = match.group(0)
@@ -6094,7 +6297,43 @@ _RECOMMENDATION_GROUNDING_FALLBACK = (
 )
 
 
-def _stream_with_recommendation_grounding(token_iter, route, evidence_text):
+def _build_recommendation_retry_prompt(original_prompt, previous_attempt, unverified_terms):
+    """
+    Builds a corrective follow-up prompt after a failed grounding
+    check - used for exactly one retry before falling back (see
+    _stream_with_recommendation_grounding). Quotes back the model's
+    own bad output and the specific unverified term(s) so the
+    correction is concrete rather than a repeat of the same
+    instructions that already failed to prevent it.
+    """
+
+    unverified_display = "; ".join(unverified_terms) or "unverified content"
+
+    return f"""{original_prompt}
+
+---
+
+Your previous answer failed a factual verification check. It
+contained the following text, which does not appear anywhere in the
+RECOMMENDATION EVIDENCE block above: {unverified_display}
+
+YOUR PREVIOUS (REJECTED) ANSWER:
+{previous_attempt}
+
+Write a completely new answer from scratch. Do not reuse any of the
+rejected text above. Every vendor, sender, date, amount, leave type,
+subject line, and ID must be an actual literal value copied from the
+RECOMMENDATION EVIDENCE block - if you don't have the real value for
+a field, drop that entire recommendation rather than describing the
+field instead of naming its value.
+
+ANSWER:
+""".strip()
+
+
+def _stream_with_recommendation_grounding(
+    token_iter, route, evidence_text, regenerate_fn=None
+):
     """
     Wraps a raw answer-model token generator. Every other route
     passes straight through unchanged - no behavior change, no
@@ -6104,10 +6343,17 @@ def _stream_with_recommendation_grounding(token_iter, route, evidence_text):
     answer has been generated and checked with
     _verify_recommendation_grounding() against the exact evidence
     that was retrieved. A grounded answer is released in full
-    (re-chunked so the UI still gets a streaming/typing feel); an
-    ungrounded one is discarded entirely and replaced with a safe
-    fallback that still points at Sources - the model's fabricated
-    text is never sent to the caller, not even partially.
+    (re-chunked so the UI still gets a streaming/typing feel).
+
+    If the first attempt fails and `regenerate_fn` was supplied, ONE
+    corrective regeneration is attempted (see
+    _build_recommendation_retry_prompt) before giving up - a single
+    bad generation shouldn't mean the user gets no recommendation at
+    all when a second attempt, told exactly what it got wrong, often
+    succeeds. Only if the retry also fails (or no regenerate_fn was
+    given) does this fall back to the safe message - the model's
+    fabricated/templated text is never sent to the caller, not even
+    partially, at any stage.
     """
 
     if route != "RECOMMEND":
@@ -6119,6 +6365,29 @@ def _stream_with_recommendation_grounding(token_iter, route, evidence_text):
     is_grounded, unverified_terms = _verify_recommendation_grounding(
         buffered, evidence_text
     )
+
+    if not is_grounded and regenerate_fn is not None:
+        log_timing(
+            "[recommend] grounding check FAILED on first attempt - "
+            f"unverified term(s): {unverified_terms} - retrying once"
+        )
+        try:
+            retried = regenerate_fn(buffered, unverified_terms)
+        except Exception as error:
+            log_timing(f"[recommend] retry generation FAILED: {error}")
+            retried = None
+
+        if retried:
+            retried_grounded, retried_unverified = _verify_recommendation_grounding(
+                retried, evidence_text
+            )
+            if retried_grounded:
+                buffered, is_grounded = retried, True
+            else:
+                log_timing(
+                    "[recommend] retry ALSO failed grounding - unverified "
+                    f"term(s): {retried_unverified}"
+                )
 
     if not is_grounded:
         log_timing(
@@ -6205,10 +6474,38 @@ def stream_ollama_response(question):
     # RECOMMEND only: buffer + verify against the exact evidence
     # before anything reaches the caller (see
     # _stream_with_recommendation_grounding). Every other route
-    # streams through unchanged.
+    # streams through unchanged. On a failed grounding check,
+    # regenerate_recommendation_once does ONE blocking, non-streamed
+    # retry against the same ANSWER_MODEL with a corrective prompt,
+    # before the wrapper falls back to the safe message.
     recommendation_evidence = st.session_state.get("last_recommendation_evidence")
+
+    def regenerate_recommendation_once(previous_attempt, unverified_terms):
+        retry_prompt = _build_recommendation_retry_prompt(
+            prompt, previous_attempt, unverified_terms
+        )
+        retry_response = OLLAMA_SESSION.post(
+            OLLAMA_URL,
+            json={
+                "model": ANSWER_MODEL,
+                "prompt": retry_prompt,
+                "stream": False,
+                "keep_alive": "24h",
+                "options": {
+                    "temperature": 0.0,
+                    "num_ctx": LOCAL_MODEL_NUM_CTX,
+                    "num_predict": 400,
+                    "num_gpu": 99,
+                },
+            },
+            timeout=120,
+        )
+        retry_response.raise_for_status()
+        return retry_response.json().get("response", "")
+
     yield from _stream_with_recommendation_grounding(
-        _raw_tokens(), route, recommendation_evidence
+        _raw_tokens(), route, recommendation_evidence,
+        regenerate_fn=regenerate_recommendation_once,
     )
 
     log_timing(
