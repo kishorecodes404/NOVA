@@ -25,6 +25,8 @@ import random
 import re
 import requests
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -6079,17 +6081,61 @@ def render_dashboard_view():
         unsafe_allow_html=True,
     )
 
-    dashboard_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "reports",
-        "dashboard.html",
-    )
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    dashboard_path = os.path.join(project_root, "reports", "dashboard.html")
+
+    # ================================
+    # RUN EVALUATION BUTTON
+    #
+    # Runs the real pytest suite + the real dashboard generator as
+    # subprocesses, right here in the same page - no separate server,
+    # no terminal. This is the only button on the page that mutates
+    # anything; everything else below just displays whatever the
+    # last run produced.
+    # ================================
+
+    button_col, status_col = st.columns([1, 4])
+
+    with button_col:
+        run_clicked = st.button("🔁  Run Evaluation", use_container_width=True)
+
+    if run_clicked:
+        with st.spinner("Running full test suite (pytest tests/ -v)..."):
+            pytest_result = subprocess.run(
+                [sys.executable, "-m", "pytest", "tests/", "-v"],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+
+        with st.spinner("Rebuilding the dashboard..."):
+            dashboard_result = subprocess.run(
+                [sys.executable, "generate_dashboard.py"],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
+        if dashboard_result.returncode == 0:
+            st.session_state.last_evaluation_summary = pytest_result.stdout.strip().splitlines()[-1] \
+                if pytest_result.stdout.strip() else "Evaluation finished."
+            st.rerun()
+        else:
+            st.error(
+                "The dashboard didn't rebuild cleanly. Details below:\n\n"
+                f"```\n{dashboard_result.stderr.strip()}\n```"
+            )
+
+    with status_col:
+        last_summary = st.session_state.get("last_evaluation_summary")
+        if last_summary:
+            st.caption(last_summary)
 
     if not os.path.exists(dashboard_path):
         st.info(
-            "No dashboard yet. Run the test suite and generate it first:\n\n"
-            "```\npytest tests/ -v\npython generate_dashboard.py\n```\n\n"
-            "Then click **Dashboard** again."
+            "No dashboard yet. Click **Run Evaluation** above to generate one."
         )
         return
 
