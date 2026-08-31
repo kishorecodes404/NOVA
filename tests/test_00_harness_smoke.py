@@ -85,6 +85,90 @@ def test_mock_web_search_returns_scripted_results(mock_web_search, rag_module):
     assert sources
 
 
+def _backdate_leave_request(rag_module, request_id, days_ago):
+    """Test helper: rewrites a stored leave request's requested_at
+    to `days_ago` days in the past, so staleness logic can be
+    exercised without waiting for real time to pass."""
+    from datetime import datetime, timedelta
+
+    store = rag_module._load_leave_store()
+    for request in store["requests"]:
+        if request["id"] == request_id:
+            request["requested_at"] = (
+                datetime.now() - timedelta(days=days_ago)
+            ).isoformat(timespec="seconds")
+    assert rag_module._save_leave_store(store)
+
+
+def test_recommendation_evidence_flags_stale_request_with_matching_preference(
+    isolated_stores, rag_module, app_module
+):
+    from datetime import date
+
+    # Two "casual" requests -> a real repeat pattern (>=2). Backdate
+    # the first past the staleness threshold; leave the second
+    # fresh, to check both branches in one pass.
+    ok1, message1, details1 = rag_module.apply_leave(
+        "me", "casual", date(2026, 9, 10), date(2026, 9, 10), reason="test"
+    )
+    assert ok1 is True, message1
+    stale_id = details1["record"]["id"]
+    _backdate_leave_request(rag_module, stale_id, days_ago=5)
+
+    ok2, message2, _ = rag_module.apply_leave(
+        "me", "casual", date(2026, 9, 21), date(2026, 9, 21), reason="test"
+    )
+    assert ok2 is True, message2
+
+    context, sources = app_module._gather_recommendation_evidence()
+
+    # The stale one is flagged as a genuine recommendation, with the
+    # matching preference attached inline - never as a standalone
+    # "INFERRED PREFERENCES" fact with nothing to anchor it to.
+    assert "MAY BE WORTH A FOLLOW-UP" in context
+    assert "your most-requested leave type" in context
+    assert any("may need a follow-up" in s for s in sources)
+
+    # The fresh one is present as status only, with no preference
+    # note attached (it's not stale, so nothing to anchor it to).
+    assert "no action needed from you yet" in context
+
+
+def test_recommendation_evidence_no_preference_note_without_a_repeat(
+    isolated_stores, rag_module, app_module
+):
+    from datetime import date
+
+    # Only one request ever made -> no repeat pattern, so even a
+    # stale request gets no preference note.
+    ok, message, details = rag_module.apply_leave(
+        "me", "casual", date(2026, 9, 10), date(2026, 9, 10), reason="test"
+    )
+    assert ok is True, message
+    _backdate_leave_request(rag_module, details["record"]["id"], days_ago=5)
+
+    context, _ = app_module._gather_recommendation_evidence()
+
+    assert "MAY BE WORTH A FOLLOW-UP" in context
+    assert "your most-requested leave type" not in context
+
+
+def test_recommendation_evidence_history_is_context_only(
+    isolated_stores, rag_module, app_module
+):
+    from datetime import date
+
+    ok, message, _ = rag_module.apply_leave(
+        "me", "sick", date(2026, 9, 10), date(2026, 9, 10), reason="test"
+    )
+    assert ok is True, message
+
+    context, _ = app_module._gather_recommendation_evidence()
+
+    assert "RECENT LEAVE HISTORY (context only" in context
+    assert "sick" in context
+
+
 def test_mock_calendar_reads_fixture_ics(mock_calendar, rag_module):
     from datetime import date, timedelta
     # The fixture event is 2026-09-01 09:00 UTC; get_events_in_range()

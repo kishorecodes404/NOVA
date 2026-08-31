@@ -376,6 +376,9 @@ def mock_web_search(monkeypatch, rag_module):
     state = SimpleNamespace(results=[], error=None)
 
     class FakeDDGS:
+        def __init__(self, *args, **kwargs):
+            pass
+
         def __enter__(self):
             return self
 

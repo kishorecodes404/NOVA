@@ -29,6 +29,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import Counter
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
@@ -1468,15 +1469,26 @@ def stream_response(api_key, model_name, question):
 
     first_token = True
 
-    for chunk in response:
-        if chunk.text:
-            if first_token:
-                first_token = False
-                log_timing(
-                    f"[gemini] time to first token = "
-                    f"{time.perf_counter() - generation_start:.2f}s"
-                )
-            yield chunk.text
+    def _raw_tokens():
+        nonlocal first_token
+        for chunk in response:
+            if chunk.text:
+                if first_token:
+                    first_token = False
+                    log_timing(
+                        f"[gemini] time to first token = "
+                        f"{time.perf_counter() - generation_start:.2f}s"
+                    )
+                yield chunk.text
+
+    # RECOMMEND only: buffer + verify against the exact evidence
+    # before anything reaches the caller (see
+    # _stream_with_recommendation_grounding). Every other route
+    # streams through unchanged.
+    recommendation_evidence = st.session_state.get("last_recommendation_evidence")
+    yield from _stream_with_recommendation_grounding(
+        _raw_tokens(), route, recommendation_evidence
+    )
 
     log_timing(
         f"[gemini] full generation took "
@@ -1539,42 +1551,53 @@ def groq_stream_response(api_key, model_name, question):
 
     first_token = True
 
-    for line in response.iter_lines():
+    def _raw_tokens():
+        nonlocal first_token
+        for line in response.iter_lines():
 
-        if not line:
-            continue
+            if not line:
+                continue
 
-        decoded = line.decode("utf-8")
+            decoded = line.decode("utf-8")
 
-        if not decoded.startswith("data: "):
-            continue
+            if not decoded.startswith("data: "):
+                continue
 
-        payload = decoded[len("data: "):]
+            payload = decoded[len("data: "):]
 
-        if payload.strip() == "[DONE]":
-            break
+            if payload.strip() == "[DONE]":
+                break
 
-        try:
-            chunk = json.loads(payload)
-        except ValueError:
-            continue
+            try:
+                chunk = json.loads(payload)
+            except ValueError:
+                continue
 
-        delta = (
-            chunk.get("choices", [{}])[0]
-            .get("delta", {})
-            .get("content")
-        )
+            delta = (
+                chunk.get("choices", [{}])[0]
+                .get("delta", {})
+                .get("content")
+            )
 
-        if delta:
+            if delta:
 
-            if first_token:
-                first_token = False
-                log_timing(
-                    f"[groq] time to first token = "
-                    f"{time.perf_counter() - generation_start:.2f}s"
-                )
+                if first_token:
+                    first_token = False
+                    log_timing(
+                        f"[groq] time to first token = "
+                        f"{time.perf_counter() - generation_start:.2f}s"
+                    )
 
-            yield delta
+                yield delta
+
+    # RECOMMEND only: buffer + verify against the exact evidence
+    # before anything reaches the caller (see
+    # _stream_with_recommendation_grounding). Every other route
+    # streams through unchanged.
+    recommendation_evidence = st.session_state.get("last_recommendation_evidence")
+    yield from _stream_with_recommendation_grounding(
+        _raw_tokens(), route, recommendation_evidence
+    )
 
     log_timing(
         f"[groq] full generation took "
@@ -4240,10 +4263,26 @@ def _format_expense_evidence(question):
 # =========================================================
 # RECOMMENDATION AGENT
 #
-# Looks across NOVA's own data - pending POs/leave/expenses,
-# upcoming meetings, recent mail, leave balance - and produces a
-# short list of things worth the user's attention, each with a
-# reason attached.
+# Looks across NOVA's own data - current context (own requests
+# awaiting approval, low leave balance, upcoming meetings, recent
+# mail), the user's request HISTORY (recent leave/PO/expense
+# activity), and PREFERENCES inferred from that same history - and
+# produces a short list of things worth the user's attention, each
+# with a reason attached.
+#
+# Two corrections baked into the evidence itself (not left to the
+# LLM to get right on its own):
+#
+# 1. A request the user submitted is their own OUTBOUND ask,
+#    awaiting someone ELSE's approval - not an action item for the
+#    user. It's only surfaced as worth a follow-up once it's gone
+#    unanswered past _RECOMMENDATION_STALE_AFTER_DAYS; a fresh
+#    submission is status, not a to-do.
+#
+# 2. A preference (e.g. "you usually use this vendor") is only ever
+#    attached inline to a specific STALE request it actually
+#    matches - never emitted as a standalone fact, so the model has
+#    nothing to recite when there's no live item it's relevant to.
 #
 # Every candidate below is computed in plain Python from real data
 # (same "deterministic evidence, LLM only phrases it" approach as
@@ -4252,6 +4291,65 @@ def _format_expense_evidence(question):
 # is empty and the RECOMMEND prompt (see build_routed_prompt()) is
 # told to say so honestly instead of manufacturing a recommendation.
 # =========================================================
+
+def _infer_frequent_value(records, field, min_count=2):
+    """
+    Returns (value, count) for the most common `field` value across
+    `records` (a list of dicts) if it appears at least `min_count`
+    times, else None.
+
+    This is the only "preference" signal the Recommendation Agent
+    uses - a real repeat in the user's own history (e.g. "casual"
+    leave requested 3 times, or the same PO vendor used twice), not
+    a guess or a profile invented by the model. A single occurrence
+    is not a pattern, so it's deliberately excluded by default.
+    """
+
+    values = [
+        (record.get(field) or "").strip()
+        for record in records
+        if (record.get(field) or "").strip()
+    ]
+
+    if not values:
+        return None
+
+    value, count = Counter(values).most_common(1)[0]
+
+    if count < min_count:
+        return None
+
+    return value, count
+
+
+# A request the user submitted is only something worth acting on
+# again (a follow-up) once it's sat with no response for a while -
+# a fresh submission is a status update, not a to-do item. This
+# threshold decides that split; see the pending-request loops
+# below.
+_RECOMMENDATION_STALE_AFTER_DAYS = 3
+
+# Literal subject-line signals that a message plausibly needs a
+# response/action - deliberately narrow so this never invents
+# urgency the email itself doesn't show. A miss just leaves the
+# email in the general "recent mail" context bucket instead of the
+# flagged one - never the reverse.
+_MAIL_ACTION_SIGNALS = (
+    "urgent", "action required", "action needed", "approval",
+    "approve", "reject", "overdue", "past due", "error", "failed",
+    "failure", "reminder", "response needed", "please respond",
+    "review required",
+)
+
+
+def _days_since(timestamp_str):
+    """Whole days between an ISO timestamp string and now, or None if unparseable."""
+
+    try:
+        return (datetime.now() - datetime.fromisoformat(timestamp_str)).days
+    except (TypeError, ValueError):
+        return None
+
 
 def _gather_recommendation_evidence():
     """
@@ -4262,47 +4360,152 @@ def _gather_recommendation_evidence():
     """
 
     chunks, sources = [], []
+    user_key = _po_user_key_safe("me")
 
-    # ---- Pending approvals waiting on the user ----
+    # ---- History + inferred preferences, computed FIRST so a real
+    # preference match can be attached to the specific pending item
+    # it applies to below, instead of floating as a standalone fact
+    # the model might recite regardless of relevance. ----
+
+    leave_history = get_leave_history("me", include_cancelled=True)
+    po_history = get_po_history("me", include_cancelled=True)
+    expense_history = get_expense_history("me", include_cancelled=True)
+
+    leave_preference = _infer_frequent_value(leave_history, "leave_type")
+    vendor_preference = _infer_frequent_value(po_history, "vendor")
+    category_preference = _infer_frequent_value(expense_history, "category")
+
+    # ---- Requests the user submitted, still awaiting someone
+    # ELSE's approval. This is status, not an action item - the
+    # user already did their part. It only becomes something worth
+    # recommending once it's gone stale (see
+    # _RECOMMENDATION_STALE_AFTER_DAYS) with no response; a
+    # preference match is only ever attached to a STALE item, so it
+    # always accompanies something actionable and never appears on
+    # its own. ----
 
     for request in get_pending_po_requests():
-        if request.get("requester") != _po_user_key_safe("me"):
+        if request.get("requester") != user_key:
             continue
+
+        days_pending = _days_since(request.get("requested_at"))
+        is_stale = days_pending is not None and days_pending >= _RECOMMENDATION_STALE_AFTER_DAYS
+
+        if is_stale:
+            status_line = (
+                f"STATUS: pending {days_pending} day(s), no response yet - "
+                f"MAY BE WORTH A FOLLOW-UP"
+            )
+        else:
+            status_line = (
+                f"STATUS: awaiting approval "
+                f"(submitted {days_pending if days_pending is not None else '?'} "
+                f"day(s) ago) - no action needed from you yet"
+            )
+
+        preference_line = ""
+        if (
+            is_stale and vendor_preference
+            and (request.get("vendor") or "").strip() == vendor_preference[0]
+        ):
+            preference_line = (
+                f"\nNOTE: {vendor_preference[0]} is your most-used vendor "
+                f"({vendor_preference[1]} of {len(po_history)} past POs)"
+            )
+
         chunks.append(
-            f"PENDING PO {request.get('id', '?')}\n"
+            f"YOUR PO REQUEST {request.get('id', '?')}\n"
             f"VENDOR: {request.get('vendor', 'N/A')}\n"
             f"DUE DATE: {request.get('due_date', 'N/A')}\n"
-            f"REQUESTED AT: {request.get('requested_at', 'N/A')}"
+            f"REQUESTED AT: {request.get('requested_at', 'N/A')}\n"
+            f"{status_line}{preference_line}"
         )
         sources.append(
-            f"Pending PO - {request.get('vendor', 'N/A')} "
-            f"(due {request.get('due_date', 'N/A')})"
+            f"Your PO to {request.get('vendor', 'N/A')} - "
+            + ("may need a follow-up" if is_stale else "awaiting approval")
         )
 
     for request in get_pending_leave_requests():
-        if request.get("user") != _po_user_key_safe("me"):
+        if request.get("user") != user_key:
             continue
+
+        days_pending = _days_since(request.get("requested_at"))
+        is_stale = days_pending is not None and days_pending >= _RECOMMENDATION_STALE_AFTER_DAYS
+
+        if is_stale:
+            status_line = (
+                f"STATUS: pending {days_pending} day(s), no response yet - "
+                f"MAY BE WORTH A FOLLOW-UP"
+            )
+        else:
+            status_line = (
+                f"STATUS: awaiting approval "
+                f"(submitted {days_pending if days_pending is not None else '?'} "
+                f"day(s) ago) - no action needed from you yet"
+            )
+
+        preference_line = ""
+        if (
+            is_stale and leave_preference
+            and (request.get("leave_type") or "").strip() == leave_preference[0]
+        ):
+            preference_line = (
+                f"\nNOTE: {leave_preference[0]} is your most-requested leave "
+                f"type ({leave_preference[1]} of {len(leave_history)} past requests)"
+            )
+
         chunks.append(
-            f"PENDING LEAVE REQUEST {request.get('id', '?')}\n"
+            f"YOUR LEAVE REQUEST {request.get('id', '?')}\n"
             f"TYPE: {request.get('leave_type', 'N/A')}\n"
-            f"DATES: {request.get('start', 'N/A')} to {request.get('end', 'N/A')}"
+            f"DATES: {request.get('start', 'N/A')} to {request.get('end', 'N/A')}\n"
+            f"{status_line}{preference_line}"
         )
         sources.append(
-            f"Pending leave - {request.get('leave_type', 'N/A')} "
-            f"{request.get('start', 'N/A')} to {request.get('end', 'N/A')}"
+            f"Your {request.get('leave_type', 'N/A')} leave request "
+            f"({request.get('start', 'N/A')} to {request.get('end', 'N/A')}) - "
+            + ("may need a follow-up" if is_stale else "awaiting approval")
         )
 
     for request in get_pending_expense_requests():
-        if request.get("requester") != _po_user_key_safe("me"):
+        if request.get("requester") != user_key:
             continue
+
+        days_pending = _days_since(request.get("requested_at"))
+        is_stale = days_pending is not None and days_pending >= _RECOMMENDATION_STALE_AFTER_DAYS
+
+        if is_stale:
+            status_line = (
+                f"STATUS: pending {days_pending} day(s), no response yet - "
+                f"MAY BE WORTH A FOLLOW-UP"
+            )
+        else:
+            status_line = (
+                f"STATUS: awaiting approval "
+                f"(submitted {days_pending if days_pending is not None else '?'} "
+                f"day(s) ago) - no action needed from you yet"
+            )
+
+        preference_line = ""
+        if (
+            is_stale and category_preference
+            and (request.get("category") or "").strip() == category_preference[0]
+        ):
+            preference_line = (
+                f"\nNOTE: {category_preference[0]} is your most frequent "
+                f"expense category ({category_preference[1]} of "
+                f"{len(expense_history)} past claims)"
+            )
+
         chunks.append(
-            f"PENDING EXPENSE CLAIM {request.get('id', '?')}\n"
+            f"YOUR EXPENSE CLAIM {request.get('id', '?')}\n"
             f"CATEGORY: {request.get('category', 'N/A')}\n"
-            f"AMOUNT: {request.get('amount', 'N/A')}"
+            f"AMOUNT: {request.get('amount', 'N/A')}\n"
+            f"{status_line}{preference_line}"
         )
         sources.append(
-            f"Pending expense - {request.get('category', 'N/A')} "
-            f"{request.get('amount', 'N/A')}"
+            f"Your {request.get('category', 'N/A')} expense claim "
+            f"({request.get('amount', 'N/A')}) - "
+            + ("may need a follow-up" if is_stale else "awaiting approval")
         )
 
     # ---- Low leave balance (< 2 days on any leave type) ----
@@ -4333,7 +4536,13 @@ def _gather_recommendation_evidence():
         )
         sources.append(f"{len(upcoming)} upcoming meeting(s) in the next 3 days")
 
-    # ---- Recent mail (no keyword -> falls back to most recent) ----
+    # ---- Recent mail - split by a real signal, not just recency.
+    # "Recent" alone doesn't mean "needs your attention" (a routine
+    # notification is just as recent as an urgent one), so this
+    # scans the subject line for literal action-signal keywords
+    # (_MAIL_ACTION_SIGNALS) and only labels a message as possibly
+    # needing a response when one is actually present in the
+    # subject - never inferred from the body or guessed. ----
 
     try:
         mail_context, mail_sources = search_mail(
@@ -4343,8 +4552,71 @@ def _gather_recommendation_evidence():
         mail_context, mail_sources = "", []
 
     if mail_context:
-        chunks.append("RECENT MAIL\n" + mail_context)
-        sources.extend(mail_sources[:5])
+        flagged_sources, passive_sources = [], []
+        for source in mail_sources:
+            subject = source.split(" - ", 1)[0].lower()
+            if any(signal in subject for signal in _MAIL_ACTION_SIGNALS):
+                flagged_sources.append(source)
+            else:
+                passive_sources.append(source)
+
+        if flagged_sources:
+            chunks.append(
+                "MAIL THAT MAY NEED A RESPONSE (subject line suggests "
+                "action/approval/urgency)\n"
+                + "\n".join(f"- {source}" for source in flagged_sources)
+            )
+            sources.extend(flagged_sources)
+
+        chunks.append(
+            "RECENT MAIL (context only - not necessarily needing a "
+            "response; use only if the user asks about mail, or a "
+            "flagged item above needs it)\n" + mail_context
+        )
+        sources.extend(passive_sources)
+
+    # ---- Recent activity (history) - last 5 of each, any status.
+    # Not filtered to "pending" like the section above - this is
+    # what the user has actually been doing lately (approved,
+    # rejected, cancelled included). Context only; a preference
+    # match tied to a live, stale request above is what actually
+    # drives a recommendation, not this list on its own. ----
+
+    if leave_history:
+        recent = leave_history[:5]
+        chunks.append(
+            "RECENT LEAVE HISTORY (context only, most recent first)\n" + "\n".join(
+                f"- {record.get('leave_type', 'N/A')}: "
+                f"{record.get('start', 'N/A')} to {record.get('end', 'N/A')} "
+                f"({record.get('status', 'N/A')})"
+                for record in recent
+            )
+        )
+        sources.append(f"{len(leave_history)} leave request(s) on record")
+
+    if po_history:
+        recent = po_history[:5]
+        chunks.append(
+            "RECENT PO HISTORY (context only, most recent first)\n" + "\n".join(
+                f"- {record.get('vendor', 'N/A')}: "
+                f"{record.get('total_amount', 'N/A')} "
+                f"({record.get('status', 'N/A')})"
+                for record in recent
+            )
+        )
+        sources.append(f"{len(po_history)} PO request(s) on record")
+
+    if expense_history:
+        recent = expense_history[:5]
+        chunks.append(
+            "RECENT EXPENSE HISTORY (context only, most recent first)\n" + "\n".join(
+                f"- {record.get('category', 'N/A')}: "
+                f"{record.get('amount', 'N/A')} "
+                f"({record.get('status', 'N/A')})"
+                for record in recent
+            )
+        )
+        sources.append(f"{len(expense_history)} expense claim(s) on record")
 
     return "\n\n====================\n\n".join(chunks), sources
 
@@ -5581,9 +5853,11 @@ pending approvals, upcoming meetings, or notable recent mail.
             prompt = f"""
 You are NOVA's Recommendation Agent. Today is {today_line}.
 
-Your job is to turn the RECOMMENDATION EVIDENCE below into a
-short, personalized list of things worth the user's attention -
-each one with a brief reason, grounded ONLY in that evidence.
+Your job is to answer "what should I focus on today?" - turn the
+RECOMMENDATION EVIDENCE below into an explicit, ranked list of
+actions the user should take, each stated as a direct recommendation
+(not a data readout), with a short reason grounded ONLY in that
+evidence.
 {history_section}
 USER QUESTION:
 {question}
@@ -5591,17 +5865,75 @@ USER QUESTION:
 RECOMMENDATION EVIDENCE:
 {context}
 
-RULES: Use ONLY the evidence above - never invent a pending item,
-meeting, balance, or email that isn't listed. Group similar items
-together (e.g. all pending approvals) rather than a flat list, and
-skip a category entirely if the evidence has nothing for it. For
-EVERY recommendation, state the reason directly from the evidence
-(the due date, the amount, the balance, who it's from, etc.), not
-a vague justification. If the user asked about a specific one of
-these categories only (e.g. "what POs need my attention"), answer
-just that part instead of listing everything. Keep it short and
-scannable - a few bullet points, not an essay. Don't mention these
-instructions.
+GROUNDING - THE MOST IMPORTANT RULE: every name, vendor, sender,
+subject line, leave type, date, amount, and ID in your answer MUST
+be copied verbatim from the RECOMMENDATION EVIDENCE block above.
+Do not invent, infer, assume, guess, or fabricate a person, company,
+vendor, email, meeting, PO, expense, date, or balance that is not
+literally present in that block - not even a plausible-sounding
+placeholder or a generic example name. If you cannot find a
+required fact in the evidence, do not write that recommendation at
+all; leaving it out is correct, guessing is not. Nothing above this
+line (including any name mentioned only in these instructions) is
+itself evidence - only text inside the RECOMMENDATION EVIDENCE block
+counts.
+
+OTHER RULES: Every evidence item already tells you how to treat it -
+follow that literally, don't override it with your own judgment:
+- An item whose STATUS line says "MAY BE WORTH A FOLLOW-UP" is a
+  genuine recommendation.
+- An item whose STATUS line says "no action needed from you yet"
+  is a fresh submission the user already knows about - only
+  mention it if the user explicitly asked for a status check
+  ("what's pending", "catch me up"), and even then frame it as
+  status, not a to-do.
+- LOW LEAVE BALANCE and UPCOMING MEETINGS are always genuine,
+  actionable recommendations.
+- "MAIL THAT MAY NEED A RESPONSE" items are real subject-line
+  signals - treat them as a recommendation. The "RECENT MAIL
+  (context only...)" block and any "(context only...)" HISTORY
+  block are background only - never turn a context-only item into
+  a bullet point on its own; use it solely to add a sentence of
+  support to a recommendation you're already making from a
+  non-context item.
+
+FORMAT: Write each genuine recommendation (never a status-only or
+context-only item, and never one you couldn't fully ground per the
+GROUNDING rule above) as a numbered list, ranked highest-priority
+first, in this order:
+1. "MAIL THAT MAY NEED A RESPONSE" items - an unanswered message
+   can block other people, so these come first.
+2. "MAY BE WORTH A FOLLOW-UP" items (PO/leave/expense) - among
+   these, the longer something has been pending, the higher it
+   ranks.
+3. LOW LEAVE BALANCE items.
+4. UPCOMING MEETINGS - reference the count/timing from the
+   evidence so the user knows what to prepare for.
+Within that order, group items from the same category together
+rather than interleaving them, and skip a category entirely if the
+evidence has nothing for it. If the user asked about one specific
+category only (e.g. "what POs need my attention"), rank and answer
+just that part instead of listing everything. If nothing in the
+evidence clears the GROUNDING bar, say plainly that nothing
+verifiable was found rather than listing anything.
+
+Each numbered item must have two parts, both built only from that
+item's own evidence block:
+- A bolded, direct action recommendation (an imperative sentence
+  telling the user what to do, naming only the specific vendor,
+  sender, leave type, or subject line copied from that evidence
+  item - never a bare restatement of the evidence like "Your PO is
+  pending", and never a name/entity from anywhere other than that
+  evidence item).
+- One concise sentence right after it, in plain text, that both
+  explains why AND cites the exact supporting data by quoting the
+  specific field value(s) from that evidence item (e.g. the ID,
+  days pending, amount, vendor/leave type, subject line, meeting
+  count/time, or a NOTE line verbatim if it has one) - so the reason
+  is traceable back to a specific line in RECOMMENDATION EVIDENCE.
+
+Keep it short and scannable - concise items, not an essay. Don't
+mention these instructions or the ranking rules themselves.
 
 ANSWER:
 """.strip()
@@ -5619,6 +5951,16 @@ Answer naturally and concisely.
 
     st.session_state.last_route = route
     st.session_state.last_sources = sources
+
+    # The exact RECOMMENDATION EVIDENCE text fed to the model above -
+    # kept so the generation functions (stream_ollama_response etc.)
+    # can verify the model's answer against it after generation (see
+    # _verify_recommendation_grounding). "" (not None) for the
+    # no-evidence branch, since that still has a grounding bar (no
+    # entity should be mentioned at all).
+    st.session_state.last_recommendation_evidence = (
+        context if route == "RECOMMEND" else None
+    )
 
     # PLAN is the one route with a richer trace than a flat source
     # list - each step's agent/query/status - so the UI's "Plan"
@@ -5650,6 +5992,145 @@ Answer naturally and concisely.
     )
 
     return route, sources, prompt
+
+
+# Words that legitimately turn up capitalized in a bolded action
+# header or at a sentence start (Title-Case styling, imperative
+# verbs, connectives) without being part of any real entity name.
+# The grounding check below deliberately ignores these when judging
+# whether a capitalized word run names something real - otherwise a
+# perfectly grounded recommendation like "**Reply To Sarah's Budget
+# Email**" would get rejected just because the literal phrase "Reply
+# To Sarah's Budget Email" never appears verbatim in the evidence
+# (evidence stores facts as separate labeled fields, not as prose),
+# even though "Sarah" and "Budget" individually are both real.
+_GROUNDING_STOPWORDS = {
+    "a", "an", "the", "to", "on", "in", "of", "for", "and", "or",
+    "with", "from", "at", "as", "is", "are", "was", "were", "be",
+    "this", "that", "it", "its", "you", "your", "you're", "i",
+    "please", "today", "note", "also", "then", "so", "but", "not",
+    "before", "after", "follow", "up", "reply", "respond", "check",
+    "review", "confirm", "submit", "send", "apply", "attend",
+    "prepare", "go", "see", "get", "make", "take", "need", "needs",
+    "has", "have", "about", "recommendation", "recommendations",
+    "may", "worth", "out", "yet", "no", "days", "day", "item",
+    "items", "action", "actions", "focus", "attention", "still",
+    "due", "left", "remaining", "pending", "upcoming", "recent",
+    "low", "balance", "meeting", "meetings", "leave", "request",
+    "requested", "requests",
+}
+
+_TITLECASE_WORD_RUN_PATTERN = re.compile(
+    r"\b[A-Z][a-zA-Z']{2,}\b(?:\s+[A-Z][a-zA-Z']{2,}\b){1,3}"
+)
+
+
+def _normalize_grounding_word(word):
+    """Lowercases a candidate word and strips a trailing possessive 's."""
+
+    lowered = word.lower()
+    return lowered[:-2] if lowered.endswith("'s") else lowered
+
+
+def _verify_recommendation_grounding(answer_text, evidence_text):
+    """
+    Deterministic safety net for the RECOMMEND route only.
+
+    The answer model (a small local model, per the notes elsewhere
+    in this file on why leave-impact verdicts are computed in plain
+    Python instead of trusted to it) has previously invented
+    vendors/people/meetings that were never in the retrieved
+    evidence - a prompt instruction telling it not to is a request
+    it can ignore, this function is not.
+
+    Finds capitalized, name-like word runs in `answer_text` (two or
+    more consecutive Title-Case words - the shape a fabricated
+    company or person's name always takes) and, after stripping out
+    ordinary connective/stylistic words via _GROUNDING_STOPWORDS,
+    checks whether ANY remaining content word in that run appears in
+    `evidence_text` - the exact RECOMMENDATION EVIDENCE that was
+    actually retrieved. A run is only flagged as unverified if NONE
+    of its content words are grounded - i.e. it names something with
+    zero connection to the real data, which is exactly what a fully
+    invented entity ("Acme Corp", "John Doe") looks like. A run that
+    mixes a real entity word (a vendor, a name, a subject fragment)
+    with an ordinary word that just isn't in the evidence (a verb
+    like "Renew", a generic noun like "Email") is intentionally NOT
+    flagged - requiring every single word in a natural-language
+    sentence to be a literal copy of the evidence would reject
+    correct answers just for being phrased in plain English instead
+    of parroting the evidence's field labels verbatim.
+
+    Returns (is_grounded: bool, unverified_terms: list[str]) - the
+    latter holds whole unverified runs, not individual words.
+    """
+
+    evidence_lower = (evidence_text or "").lower()
+    unverified = []
+
+    for match in _TITLECASE_WORD_RUN_PATTERN.finditer(answer_text or ""):
+        run_text = match.group(0)
+        run_words = run_text.split()
+        content_words = [
+            _normalize_grounding_word(raw)
+            for raw in run_words
+            if _normalize_grounding_word(raw) not in _GROUNDING_STOPWORDS
+        ]
+
+        if not content_words:
+            continue
+
+        if not any(word in evidence_lower for word in content_words):
+            unverified.append(run_text)
+
+    return (len(unverified) == 0), unverified
+
+
+_RECOMMENDATION_GROUNDING_FALLBACK = (
+    "I couldn't confirm my recommendations against your actual data, "
+    "so I'm not going to guess. Check the Sources below for what's "
+    "on file, or ask about a specific item (a PO, leave request, "
+    "expense, or meeting) and I'll look it up directly."
+)
+
+
+def _stream_with_recommendation_grounding(token_iter, route, evidence_text):
+    """
+    Wraps a raw answer-model token generator. Every other route
+    passes straight through unchanged - no behavior change, no
+    added latency.
+
+    For RECOMMEND, nothing is shown to the user until the FULL
+    answer has been generated and checked with
+    _verify_recommendation_grounding() against the exact evidence
+    that was retrieved. A grounded answer is released in full
+    (re-chunked so the UI still gets a streaming/typing feel); an
+    ungrounded one is discarded entirely and replaced with a safe
+    fallback that still points at Sources - the model's fabricated
+    text is never sent to the caller, not even partially.
+    """
+
+    if route != "RECOMMEND":
+        for token in token_iter:
+            yield token
+        return
+
+    buffered = "".join(token_iter)
+    is_grounded, unverified_terms = _verify_recommendation_grounding(
+        buffered, evidence_text
+    )
+
+    if not is_grounded:
+        log_timing(
+            "[recommend] grounding check FAILED - discarding generated "
+            f"answer, unverified term(s): {unverified_terms}"
+        )
+        yield _RECOMMENDATION_GROUNDING_FALLBACK
+        return
+
+    chunk_size = 40
+    for i in range(0, len(buffered), chunk_size):
+        yield buffered[i:i + chunk_size]
 
 
 def stream_ollama_response(question):
@@ -5699,25 +6180,36 @@ def stream_ollama_response(question):
 
     response.raise_for_status()
 
-    for line in response.iter_lines():
+    def _raw_tokens():
+        nonlocal first_token
+        for line in response.iter_lines():
 
-        if not line:
-            continue
+            if not line:
+                continue
 
-        data = json.loads(line)
-        token = data.get("response", "")
+            data = json.loads(line)
+            token = data.get("response", "")
 
-        if token:
-            if first_token:
-                first_token = False
-                log_timing(
-                    f"[ollama] time to first token = "
-                    f"{time.perf_counter() - generation_start:.2f}s"
-                )
-            yield token
+            if token:
+                if first_token:
+                    first_token = False
+                    log_timing(
+                        f"[ollama] time to first token = "
+                        f"{time.perf_counter() - generation_start:.2f}s"
+                    )
+                yield token
 
-        if data.get("done"):
-            break
+            if data.get("done"):
+                break
+
+    # RECOMMEND only: buffer + verify against the exact evidence
+    # before anything reaches the caller (see
+    # _stream_with_recommendation_grounding). Every other route
+    # streams through unchanged.
+    recommendation_evidence = st.session_state.get("last_recommendation_evidence")
+    yield from _stream_with_recommendation_grounding(
+        _raw_tokens(), route, recommendation_evidence
+    )
 
     log_timing(
         f"[ollama] full generation took "
