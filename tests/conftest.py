@@ -401,11 +401,25 @@ def isolated_stores(monkeypatch, rag_module, tmp_path):
     monkeypatch.setattr(rag, "PO_BUDGET_LIMITS", {...}) etc., or via
     monkeypatch.setenv(...) for the live-read env vars
     (NOVA_*_ELIGIBLE_USERS).
+
+    Also neutralizes the Meetings calendar (MEETINGS_ICS_PATH="",
+    MEETINGS_CALENDARS={}). Without this, apply_leave()/apply_po()'s
+    calendar cross-check (see check_group_availability()) falls
+    through to whatever calendar is configured in the real
+    environment's .env - on a machine with a real, possibly
+    cloud-synced (OneDrive/Google Drive) .ics file configured, that
+    is a real, slow disk/network read on every single Leave/PO test,
+    not a fast in-memory mock. mock_calendar (below) depends on this
+    fixture and re-points these at its own fixture .ics file
+    afterwards, so tests that actually want a real calendar to check
+    against still work exactly as before.
     """
 
     monkeypatch.setattr(rag_module, "LEAVE_STORE_PATH", str(tmp_path / "leave_store.json"))
     monkeypatch.setattr(rag_module, "PO_STORE_PATH", str(tmp_path / "po_store.json"))
     monkeypatch.setattr(rag_module, "EXPENSE_STORE_PATH", str(tmp_path / "expense_store.json"))
+    monkeypatch.setattr(rag_module, "MEETINGS_ICS_PATH", "")
+    monkeypatch.setattr(rag_module, "MEETINGS_CALENDARS", {})
 
     # Permissive defaults - no eligibility restriction, generous caps -
     # so a "normal" test doesn't accidentally hit a business rule it
@@ -449,13 +463,20 @@ def fixture_ics_path(tmp_path):
 
 
 @pytest.fixture
-def mock_calendar(monkeypatch, rag_module, fixture_ics_path):
+def mock_calendar(isolated_stores, monkeypatch, rag_module, fixture_ics_path):
     """
     Points the "me" calendar at the fixture ICS file. MEETINGS_ICS_PATH
     alone isn't enough - MEETINGS_CALENDARS (the dict every lookup
     function actually reads: get_events_in_range, search_meetings,
     check_group_availability, ...) is built from it once at import
     time via _parse_user_calendar_map(), so it must be patched too.
+
+    Depends on isolated_stores (even though this fixture doesn't use
+    its return value) purely for fixture ORDERING: isolated_stores
+    resets MEETINGS_ICS_PATH/MEETINGS_CALENDARS to neutral defaults,
+    and pytest guarantees a fixture always runs after everything it
+    depends on - so this fixture's real values always win, no matter
+    what order a test lists them in as parameters.
     """
     monkeypatch.setattr(rag_module, "MEETINGS_ICS_PATH", str(fixture_ics_path))
     monkeypatch.setattr(
