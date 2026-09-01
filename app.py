@@ -4141,6 +4141,52 @@ def _resolve_meetings_query_date(question):
     return today
 
 
+def _drop_past_events(event_labels):
+    """
+    Filters out any event label whose embedded date/time has already
+    passed (strictly before the current moment) - reuses the exact
+    same "TITLE (YYYY-MM-DD HH:MM)[...]" parsing regex as
+    _build_today_status_directive() below, since that's the label
+    format get_events_on_date()/get_events_in_range() actually
+    return.
+
+    This exists specifically for the Recommendation Agent: unlike
+    the Meetings Agent route (which deliberately keeps past events
+    so it can honestly answer "did I have a meeting earlier?"),
+    RECOMMEND is forward-looking - "what should I prepare for" -
+    so a meeting that has already happened has nothing left to
+    prepare for and should never show up as a recommendation, no
+    matter how recently it ended.
+
+    A label with no parseable date/time is kept as-is (fail open -
+    better to show something unfilterable than to silently drop a
+    real event because its format didn't match).
+    """
+
+    now = datetime.now()
+    kept = []
+
+    for label in event_labels:
+        match = re.search(r"\((\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})\)", label)
+
+        if not match:
+            kept.append(label)
+            continue
+
+        try:
+            event_dt = datetime.strptime(
+                f"{match.group(1)} {match.group(2)}", "%Y-%m-%d %H:%M"
+            )
+        except ValueError:
+            kept.append(label)
+            continue
+
+        if event_dt >= now:
+            kept.append(label)
+
+    return kept
+
+
 def _build_today_status_directive(event_labels, target_date=None):
     """
     Computes a deterministic, unambiguous free/busy fact for a given
@@ -4807,7 +4853,7 @@ def _gather_recommendation_evidence():
 
     try:
         today = datetime.now().date()
-        todays_events = get_events_on_date(today, user="me")
+        todays_events = _drop_past_events(get_events_on_date(today, user="me"))
     except Exception:
         todays_events = []
 
@@ -4822,8 +4868,8 @@ def _gather_recommendation_evidence():
     # higher-priority subset of the same data). ----
 
     try:
-        upcoming = get_events_in_range(
-            today, today + timedelta(days=3), user="me"
+        upcoming = _drop_past_events(
+            get_events_in_range(today, today + timedelta(days=3), user="me")
         )
     except Exception:
         upcoming = []
