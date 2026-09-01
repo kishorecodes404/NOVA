@@ -2799,6 +2799,52 @@ def _call_extraction_model(extraction_prompt, num_predict=300):
     return response.json().get("response", "")
 
 
+def _call_document_writer_model(prompt, num_predict=350):
+    """
+    Shared Ollama call for GENERATE_DOCUMENT's AI-authored document
+    content - the Leave Letter's body, and the cover summary on the
+    Purchase Order/Expense Report/Meeting Minutes documents (see the
+    llm_writer callback passed into document_generator.
+    generate_document_evidence()). Uses ANSWER_MODEL rather than the
+    tiny ROUTER_MODEL used for routing/extraction - this text goes
+    straight into a document a real person signs and sends, so it's
+    worth the larger model's better prose quality.
+
+    Temperature 0.4, not the 0.0 used everywhere else for grounded
+    routes: this is the one place NOVA is asked to WRITE something in
+    its own words rather than just report a fact, and flat temp-0
+    phrasing reads noticeably robotic in a document. The facts
+    themselves are never left to the model to decide - see
+    document_generator.py's strict-fact-injection prompt and the
+    post-generation verification that checks every required fact
+    literally appears in the model's output before it's trusted. If
+    this call fails or its output drops a fact, document_generator.py
+    now fails that document's generation outright rather than falling
+    back to a hard-coded template - see DocumentWriterUnavailable.
+    """
+
+    response = OLLAMA_SESSION.post(
+        OLLAMA_URL,
+        json={
+            "model": ANSWER_MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": "24h",
+            "options": {
+                "temperature": 0.4,
+                "num_ctx": LOCAL_MODEL_NUM_CTX,
+                "num_predict": num_predict,
+                "num_gpu": 99,
+            },
+        },
+        timeout=30,
+    )
+
+    response.raise_for_status()
+
+    return response.json().get("response", "").strip()
+
+
 # ================================
 # NAME -> EMAIL ADDRESS RESOLUTION
 #
@@ -6059,21 +6105,31 @@ def build_routed_prompt(question, conversation_history):
 
     elif route == "GENERATE_DOCUMENT":
 
-        # generate_document_evidence() both (a) writes the real
-        # .docx to disk - from real PO/leave/expense/meetings
-        # records, never from LLM output - and (b) returns a fully
-        # deterministic confirmation sentence built directly from
-        # that same record in Python. generated_document_confirmation
-        # is what actually becomes the answer for this route (see
-        # the short-circuit in stream_ollama_response/groq_stream_
-        # response/stream_response below) - GENERATE_DOCUMENT never
-        # depends on an LLM call at all, so an Ollama/Groq/Gemini
-        # outage can't strand an already-generated file behind a
-        # failed chat reply.
+        # generate_document_evidence() writes the real .docx to disk
+        # from real PO/leave/expense/meetings records. The FACTS in
+        # it (names/dates/amounts/status) always come straight from
+        # those records in Python, never from the LLM - only the
+        # document's PROSE (the letter body, or a cover summary) is
+        # AI-written, via the llm_writer callback below, and
+        # document_generator.py verifies every required fact
+        # literally appears in the model's output before trusting
+        # it. Unlike before, there is no deterministic-template
+        # fallback: if the model is unreachable or drops a fact, that
+        # document's generation FAILS (document_generator.
+        # DocumentWriterUnavailable) rather than ever completing from
+        # a static template - see document_generator.py's module
+        # docstring. generated_document is None in that case, and
+        # generated_document_confirmation carries the failure
+        # message instead - both are handled the same way below
+        # whether generation succeeded or failed, so a model outage
+        # surfaces as a clear "couldn't generate that" reply rather
+        # than a crash.
         try:
             context, sources, generated_document, generated_document_confirmation = (
                 document_generator.generate_document_evidence(
-                    question, conversation_history
+                    question,
+                    conversation_history,
+                    llm_writer=_call_document_writer_model,
                 )
             )
         except Exception as error:
