@@ -122,24 +122,66 @@ def looks_like_document_generation_request(question):
             return True
 
     # Generic "generate a/the business document" / "generate a
-    # document" with no more specific noun still counts - handled
-    # downstream by _detect_document_type() falling back to asking
-    # what kind, rather than route_query() missing it entirely.
+    # document" - or a bare follow-up like "draft a copy" right after
+    # a document was already being discussed (e.g. right after filing
+    # a leave request) - still counts. Handled downstream by
+    # _detect_document_type() falling back to conversation context,
+    # or asking what kind if nothing recent gives it away, rather
+    # than route_query() missing this class of request entirely.
     if any(
         phrase in q
-        for phrase in (" a document ", " a doc ", " a business document ")
+        for phrase in (
+            " a document ", " a doc ", " a business document ",
+            " a copy ", " a draft copy ", " draft copy ", " copy of ",
+        )
     ):
         return True
 
     return False
 
 
-def _detect_document_type(question):
+# Keywords that hint at which document type a vague follow-up ("draft
+# a copy", "make one for me") is actually about, when the message
+# itself names no explicit type. Checked against recent conversation
+# text, most recent turn first - see _infer_doc_type_from_context().
+_CONTEXT_TYPE_HINTS = {
+    "leave_letter": ("leave", "sick leave", "annual leave", "casual leave"),
+    "purchase_order": ("purchase order", " po ", "vendor"),
+    "expense_report": ("expense", "reimbursement"),
+    "meeting_minutes": ("meeting", "minutes", "mom"),
+}
+
+
+def _infer_doc_type_from_context(conversation_history):
+    """
+    Best-effort fallback for a vague follow-up that names no document
+    type of its own (e.g. "draft a copy" right after NOVA just filed
+    a sick leave request). Scans recent conversation turns, most
+    recent first, for a document-shaped topic that was just being
+    discussed, so the reply matches what the person was clearly just
+    doing instead of forcing a "which kind?" round-trip - or worse,
+    falling through to an unrelated agent (see looks_like_document_
+    generation_request()'s docstring). Only used when the CURRENT
+    message carries no explicit signal of its own; never overrides one
+    that does.
+    """
+    if not conversation_history:
+        return None
+
+    lines = conversation_history.lower().splitlines()
+    for line in reversed(lines):
+        for doc_type, hints in _CONTEXT_TYPE_HINTS.items():
+            if any(hint in line for hint in hints):
+                return doc_type
+    return None
+
+
+def _detect_document_type(question, conversation_history=""):
     q = " " + question.lower().strip() + " "
     for doc_type, signals in DOCUMENT_TYPE_SIGNALS.items():
         if any(signal in q for signal in signals):
             return doc_type
-    return None
+    return _infer_doc_type_from_context(conversation_history)
 
 
 # =========================================================
@@ -527,7 +569,7 @@ _DOC_TYPE_LABEL = {
 # PUBLIC ENTRY POINT
 # =========================================================
 
-def generate_document_evidence(question):
+def generate_document_evidence(question, conversation_history=""):
     """
     Returns (context, sources, file_info, confirmation).
 
@@ -545,9 +587,15 @@ def generate_document_evidence(question):
         Ollama server erroring on /api/generate) can never strand an
         already-generated file behind a failed chat reply. None only
         when no document type could be identified at all.
+
+    conversation_history: recent chat text, used only as a fallback
+        to infer the document type for a vague follow-up like "draft
+        a copy" that names no type of its own - see
+        _infer_doc_type_from_context(). Never overrides an explicit
+        type named in `question` itself.
     """
 
-    doc_type = _detect_document_type(question)
+    doc_type = _detect_document_type(question, conversation_history)
 
     if doc_type is None:
         context = (

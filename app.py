@@ -3902,6 +3902,42 @@ def _clear_action_edit_state():
         st.session_state.pop(key, None)
 
 
+def _humanize_backend_message(message):
+    """
+    rag.py's apply_leave()/apply_po()/apply_expense()/schedule_meeting()
+    return confirmation strings written for logs and evidence, not
+    for a person to read - they use the internal "me" user key and
+    "day(s)"-style pluralization (e.g. "...for me was sent to your
+    leave approver", "1 working day(s)"). This cleans up exactly
+    those two known patterns before anything reaches the chat, and
+    otherwise leaves the message untouched - it never rewords facts,
+    only fixes how the existing ones are phrased. Reuses
+    document_generator.USER_DISPLAY_NAME so the same real name (or
+    the same loud "not configured" placeholder) appears everywhere
+    NOVA addresses the user, not just in generated documents.
+    """
+    if not message:
+        return message
+
+    cleaned = re.sub(
+        r"\bfor me\b",
+        f"for {document_generator.USER_DISPLAY_NAME}",
+        message,
+    )
+
+    def _fix_plural(match):
+        count_str, noun = match.group(1), match.group(2)
+        try:
+            count = int(count_str)
+        except ValueError:
+            return match.group(0)
+        return f"{count_str} {noun}" if count == 1 else f"{count_str} {noun}s"
+
+    cleaned = re.sub(r"\b(\d+) (working day|day)\(s\)", _fix_plural, cleaned)
+
+    return cleaned
+
+
 def _confirm_pending_action():
     """
     Button callback: actually carries out the pending SEND_MAIL or
@@ -4086,7 +4122,7 @@ def _confirm_pending_action():
     except Exception as error:
         success, message = False, f"Something went wrong: {error}"
 
-    result_text = f"✅ {message}" if success else f"⚠️ {message}"
+    result_text = f"✅ {_humanize_backend_message(message)}" if success else f"⚠️ {_humanize_backend_message(message)}"
 
     st.session_state.messages.append(
         {"role": "model", "content": result_text}
@@ -5475,6 +5511,11 @@ def _action_apply_leave(params):
         params.get("reason", ""),
         force=bool(params.get("force", False)),
     )
+    # Same raw-backend-text cleanup as the LEAVE_REQUEST edit-action
+    # path (see _humanize_backend_message) - this message reaches the
+    # user via the auto_trace/context, so it needs the same "for me"
+    # / "day(s)" fixup, not just the manual-approval flow.
+    message = _humanize_backend_message(message)
     if not success:
         # Not raised as an exception - a blocking validation error
         # (e.g. insufficient balance) isn't a transient failure that
@@ -6031,7 +6072,9 @@ def build_routed_prompt(question, conversation_history):
         # failed chat reply.
         try:
             context, sources, generated_document, generated_document_confirmation = (
-                document_generator.generate_document_evidence(question)
+                document_generator.generate_document_evidence(
+                    question, conversation_history
+                )
             )
         except Exception as error:
             log_timing(f"generate_document_evidence FAILED: {error}")
