@@ -1,3 +1,26 @@
 {
-  "requests": []
+  "requests": [
+    {
+      "id": "236b0b9c-7fee-41d0-be44-a8eb32e27c97",
+      "requester": "me",
+      "vendor": "Dell",
+      "vendor_email": "mskishore.studies@gmail.com",
+      "department": "general",
+      "items": [
+        {
+          "name": "Laptop",
+          "quantity": 1.0,
+          "unit_price": 75000.0,
+          "line_total": 75000.0
+        }
+      ],
+      "total_amount": 75000.0,
+      "justification": "To replace the old laptop in the office.",
+      "due_date": "2026-09-15",
+      "status": "pending",
+      "requested_at": "2026-09-01T11:50:12",
+      "vendor_notified": false,
+      "email_status": "pending_approval"
+    }
+  ]
 }

@@ -117,6 +117,18 @@ import planning_agent
 import autonomous_executor
 
 # ---------------------------------------------------
+# Document Generation Agent
+#
+# Assembles real, downloadable .docx business documents (Purchase
+# Order, Leave Letter, Expense Report, Meeting Minutes) straight
+# from NOVA's own stores (PO/leave/expense/meetings) - the file's
+# content is built in Python from real records, never invented by
+# an LLM. Wired into the "GENERATE_DOCUMENT" route below, following
+# the same evidence-gathering shape as _gather_recommendation_evidence().
+# ---------------------------------------------------
+import document_generator
+
+# ---------------------------------------------------
 # Timing log
 #
 # Writes straight to a file next to app.py, so it's findable
@@ -1125,6 +1137,21 @@ def init_chat_database():
             """
         )
 
+    # Persists the {"path", "filename", "doc_type"} info for any
+    # .docx the Document Generation Agent produced on this message,
+    # the same way "route"/"sources" already persist their agent
+    # metadata - without this, the download button only survived
+    # until the next rerun, and reopening an old chat lost it even
+    # though the file was still sitting on disk.
+    if "generated_file" not in columns:
+
+        cursor.execute(
+            """
+            ALTER TABLE messages
+            ADD COLUMN generated_file TEXT
+            """
+        )
+
     connection.commit()
     connection.close()
 
@@ -1233,7 +1260,7 @@ def load_chat_messages(chat_id):
 
     cursor.execute(
         """
-        SELECT role, content, route, sources
+        SELECT role, content, route, sources, generated_file
         FROM messages
         WHERE chat_id = ?
         ORDER BY id
@@ -1246,7 +1273,7 @@ def load_chat_messages(chat_id):
 
     messages = []
 
-    for role, content, route, sources_json in rows:
+    for role, content, route, sources_json, generated_file_json in rows:
 
         message = {
             "role": role,
@@ -1262,24 +1289,31 @@ def load_chat_messages(chat_id):
             except (TypeError, ValueError):
                 pass
 
+        if generated_file_json:
+            try:
+                message["generated_file"] = json.loads(generated_file_json)
+            except (TypeError, ValueError):
+                pass
+
         messages.append(message)
 
     return messages
 
 
-def save_message(chat_id, role, content, route=None, sources=None):
+def save_message(chat_id, role, content, route=None, sources=None, generated_file=None):
     """Save a message to a specific conversation."""
     connection = sqlite3.connect(CHAT_DB)
     cursor = connection.cursor()
 
     sources_json = json.dumps(sources) if sources else None
+    generated_file_json = json.dumps(generated_file) if generated_file else None
 
     cursor.execute(
         """
-        INSERT INTO messages (chat_id, role, content, route, sources)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO messages (chat_id, role, content, route, sources, generated_file)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (chat_id, role, content, route, sources_json),
+        (chat_id, role, content, route, sources_json, generated_file_json),
     )
 
     connection.commit()
@@ -1421,7 +1455,7 @@ def initialise_session():
 # Gemini) treat RECOMMEND identically instead of drifting apart.
 _GROUNDED_ROUTES = (
     "WEB", "DOCUMENT", "MAIL", "MEETINGS", "SELF_INFO", "PLAN",
-    "AUTO_EXECUTE", "RECOMMEND",
+    "AUTO_EXECUTE", "RECOMMEND", "GENERATE_DOCUMENT",
 )
 
 
@@ -1459,6 +1493,19 @@ def stream_response(api_key, model_name, question):
     route, sources, prompt = build_routed_prompt(
         question, conversation_history
     )
+
+    # GENERATE_DOCUMENT never needs Gemini at all - the confirmation
+    # text is already a deterministic sentence built straight from
+    # the real record (see generate_document_evidence() /
+    # build_routed_prompt()'s GENERATE_DOCUMENT branch). Skipping the
+    # API call here means a Gemini outage or quota issue can never
+    # strand an already-generated, already-downloadable .docx behind
+    # a failed chat reply.
+    if route == "GENERATE_DOCUMENT":
+        yield st.session_state.get(
+            "last_generate_document_confirmation"
+        ) or "Document generated."
+        return
 
     log_timing(
         f"[gemini] routing + retrieval took "
@@ -1560,6 +1607,14 @@ def groq_stream_response(api_key, model_name, question):
     route, sources, prompt = build_routed_prompt(
         question, conversation_history
     )
+
+    # See the matching short-circuit in stream_response() (Gemini) -
+    # GENERATE_DOCUMENT never needs an LLM call at all.
+    if route == "GENERATE_DOCUMENT":
+        yield st.session_state.get(
+            "last_generate_document_confirmation"
+        ) or "Document generated."
+        return
 
     log_timing(
         f"[groq] routing + retrieval took "
@@ -1933,6 +1988,10 @@ STARTER_SUGGESTIONS = [
     # was to already know the right phrasing, since no starter chip
     # pointed at it.
     "What should I focus on today?",
+    # Surfaces the Document Generation Agent (route_query() ->
+    # "GENERATE_DOCUMENT") the same way - a real .docx built from
+    # actual PO history, not a hypothetical example.
+    "Generate a purchase order document",
 ]
 
 
@@ -2090,6 +2149,26 @@ def route_query(question, conversation_history=""):
     if any(signal in q for signal in document_signals):
         log_timing("route_query -> 'DOCUMENT' (fast)")
         return "DOCUMENT"
+
+    # =========================================================
+    # FAST GENERATE-DOCUMENT ROUTING
+    #
+    # "generate/create/draft/prepare a PO document/leave letter/
+    # expense report/meeting minutes" - distinct from the DOCUMENT
+    # route above (which SEARCHES already-uploaded files via RAG).
+    # This route WRITES a new .docx assembled from NOVA's own PO/
+    # leave/expense/meetings stores. Checked before the read-only
+    # MAIL/MEETINGS/PO/etc. signals further below so a request like
+    # "draft a leave letter" isn't swallowed by the LEAVE keyword
+    # check first. document_generator.looks_like_document_generation_
+    # request() requires BOTH a generation verb and a known document
+    # noun, so ordinary status questions ("what's my leave balance")
+    # never land here.
+    # =========================================================
+
+    if document_generator.looks_like_document_generation_request(question):
+        log_timing("route_query -> 'GENERATE_DOCUMENT' (fast)")
+        return "GENERATE_DOCUMENT"
 
     # =========================================================
     # FAST SELF-INFO ROUTING
@@ -5421,6 +5500,55 @@ def _verify_leave_applied(params):
     return False, "Could not find a matching leave record after applying - verification failed.", {}
 
 
+def _detect_autonomous_leave_type(question):
+    """
+    Best-effort extraction of the leave TYPE the caller actually
+    wants applied for AUTO_EXECUTE's compound requests.
+
+    The previous version used a plain `re.search(r"\\b(sick|casual|
+    annual|earned|pto)\\b", ...)`, which returns the FIRST occurrence
+    of any of those words anywhere in the message - including ones
+    that have nothing to do with the leave being applied for. e.g.
+    "check my annual leave balance, then apply sick leave for
+    tomorrow" would silently match "annual" and ignore "sick"
+    entirely, with no warning that the wrong type was applied. This
+    is a real, observed bug (sick leave got filed as annual leave).
+
+    Priority order here, strongest signal first:
+      1. A leave-type word immediately following an application verb
+         ("apply"/"applying"/"request"/"requesting"/"take"/"taking"/
+         "book"/"booking"), e.g. "apply for sick leave" -> "sick".
+         This is the clearest expression of actual intent.
+      2. The LAST "<type> leave" phrase in the message - in a
+         compound sentence, earlier mentions tend to be context
+         (balance checks, etc.) and the real instruction comes later.
+      3. Any bare leave-type keyword, first match, as a last resort.
+
+    Still a heuristic, not a full parse - for anything more elaborate
+    than these patterns, this can still mis-detect. If that turns out
+    to matter in practice, routing this through the same LLM-based
+    extractor extract_leave_fields() already uses (at the cost of a
+    small amount of latency) would be more robust than any regex.
+    """
+
+    q = question.lower()
+
+    action_match = re.search(
+        r"\b(?:apply(?:ing)?|request(?:ing)?|take|taking|book(?:ing)?)"
+        r"\s+(?:for\s+)?(?:a\s+|an\s+)?(sick|casual|annual|earned|pto)\b",
+        q,
+    )
+    if action_match:
+        return action_match.group(1)
+
+    phrase_matches = re.findall(r"\b(sick|casual|annual|earned|pto)\s+leave\b", q)
+    if phrase_matches:
+        return phrase_matches[-1]
+
+    bare_match = re.search(r"\b(sick|casual|annual|earned|pto)\b", q)
+    return bare_match.group(1) if bare_match else "annual"
+
+
 def _build_autonomous_leave_plan(question):
     """
     Returns (steps, start_date, end_date). steps is None if no leave
@@ -5432,8 +5560,7 @@ def _build_autonomous_leave_plan(question):
     if not start_date:
         return None, None, None
 
-    leave_type_match = re.search(r"\b(sick|casual|annual|earned|pto)\b", question.lower())
-    leave_type = leave_type_match.group(1) if leave_type_match else "annual"
+    leave_type = _detect_autonomous_leave_type(question)
 
     steps = [
         autonomous_executor.TaskStep(
@@ -5552,6 +5679,8 @@ def build_routed_prompt(question, conversation_history):
     sources = []
     plan_step_results = []
     plan_findings = []
+    generated_document = None
+    generated_document_confirmation = None
 
     retrieval_start = time.perf_counter()
 
@@ -5887,6 +6016,38 @@ def build_routed_prompt(question, conversation_history):
     # only pay that cost when the route actually resolves here.
     # =========================================================
 
+    elif route == "GENERATE_DOCUMENT":
+
+        # generate_document_evidence() both (a) writes the real
+        # .docx to disk - from real PO/leave/expense/meetings
+        # records, never from LLM output - and (b) returns a fully
+        # deterministic confirmation sentence built directly from
+        # that same record in Python. generated_document_confirmation
+        # is what actually becomes the answer for this route (see
+        # the short-circuit in stream_ollama_response/groq_stream_
+        # response/stream_response below) - GENERATE_DOCUMENT never
+        # depends on an LLM call at all, so an Ollama/Groq/Gemini
+        # outage can't strand an already-generated file behind a
+        # failed chat reply.
+        try:
+            context, sources, generated_document, generated_document_confirmation = (
+                document_generator.generate_document_evidence(question)
+            )
+        except Exception as error:
+            log_timing(f"generate_document_evidence FAILED: {error}")
+            context = f"Document generation failed: {error}"
+            sources = []
+            generated_document = None
+            generated_document_confirmation = (
+                "Sorry, I ran into a problem generating that document. "
+                "Please try again."
+            )
+
+        log_timing(
+            f"document generation evidence gathered in "
+            f"{time.perf_counter() - retrieval_start:.2f}s"
+        )
+
     elif route == "RECOMMEND":
 
         try:
@@ -6205,6 +6366,19 @@ ANSWER:
             auto_results,
         )
 
+    elif route == "GENERATE_DOCUMENT":
+
+        # This route no longer needs an LLM-authored answer at all -
+        # generated_document_confirmation (set above, in the
+        # evidence-gathering block) is a fully deterministic sentence
+        # built directly from the real record in Python. All three
+        # backends (stream_ollama_response/groq_stream_response/
+        # stream_response) short-circuit on this route right after
+        # calling build_routed_prompt() and never send `prompt` to
+        # any model - kept here only so `prompt` is always a string,
+        # in case anything ever inspects it before that short-circuit.
+        prompt = generated_document_confirmation or context
+
     elif route == "RECOMMEND":
 
         today_line = datetime.now().strftime("%A, %Y-%m-%d")
@@ -6493,6 +6667,25 @@ Answer naturally and concisely.
         else None
     )
 
+    # The real .docx file_info from document_generator.generate_
+    # document_evidence() (path/filename/doc_type), or None if no
+    # file was produced this turn - read by main() right after the
+    # answer streams, to render a download button next to the
+    # route badge. Cleared on every non-GENERATE_DOCUMENT turn so a
+    # stale download button doesn't linger under a later answer.
+    st.session_state.last_generated_document = (
+        generated_document if route == "GENERATE_DOCUMENT" else None
+    )
+
+    # The ready-to-show, LLM-free confirmation sentence for
+    # GENERATE_DOCUMENT - read by stream_ollama_response()/
+    # groq_stream_response()/stream_response() to short-circuit
+    # before ever calling their respective model APIs (see the
+    # comment in the GENERATE_DOCUMENT prompt branch above).
+    st.session_state.last_generate_document_confirmation = (
+        generated_document_confirmation if route == "GENERATE_DOCUMENT" else None
+    )
+
     return route, sources, prompt
 
 
@@ -6737,6 +6930,22 @@ def stream_ollama_response(question):
     route, sources, prompt = build_routed_prompt(
         question, conversation_history
     )
+
+    # GENERATE_DOCUMENT never needs the local model at all - the
+    # confirmation text is already a deterministic sentence built
+    # straight from the real record (see generate_document_evidence()
+    # / build_routed_prompt()'s GENERATE_DOCUMENT branch). This is
+    # what fixes the "500 Server Error ... /api/generate" failure
+    # mode: the .docx is already written to disk by the time we get
+    # here, so there is nothing left for Ollama to do, and no reason
+    # a flaky/overloaded local server should ever be able to strand
+    # an already-generated, already-downloadable file behind a
+    # failed chat reply.
+    if route == "GENERATE_DOCUMENT":
+        yield st.session_state.get(
+            "last_generate_document_confirmation"
+        ) or "Document generated."
+        return
 
     # =========================================================
     # GENERATION
@@ -7649,6 +7858,7 @@ def main():
                     "PLAN": "🧭 Planning Agent",
                     "AUTO_EXECUTE": "🤖 Autonomous Agent",
                     "RECOMMEND": "✨ Recommendation Agent",
+                    "GENERATE_DOCUMENT": "📝 Document Generator",
                 }.get(message.get("route"), None)
 
                 if route_badge:
@@ -7660,6 +7870,27 @@ def main():
                     with st.expander("Sources"):
                         for source in message_sources:
                             st.markdown(f"- {source}")
+
+                # Re-offer the download for a document generated in
+                # an earlier turn, as long as the file is still on
+                # disk (generated_documents/ isn't pruned, but a
+                # fresh deploy or manual cleanup can remove it - the
+                # try/except below just skips the button silently
+                # rather than breaking the whole history redraw).
+                message_generated_file = message.get("generated_file")
+
+                if message_generated_file and os.path.exists(message_generated_file.get("path", "")):
+                    try:
+                        with open(message_generated_file["path"], "rb") as file_handle:
+                            st.download_button(
+                                label=f"⬇️ Download {message_generated_file['filename']}",
+                                data=file_handle.read(),
+                                file_name=message_generated_file["filename"],
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                key=f"history_download_{message_generated_file['filename']}",
+                            )
+                    except Exception:
+                        pass
 
     # ================================
     # PENDING ACTION CONFIRMATION
@@ -8194,6 +8425,7 @@ def main():
                 "PLAN": "🧭 Planning Agent",
                 "AUTO_EXECUTE": "🤖 Autonomous Agent",
                 "RECOMMEND": "✨ Recommendation Agent",
+                    "GENERATE_DOCUMENT": "📝 Document Generator",
             }.get(
                 st.session_state.get("last_route"),
                 None,
@@ -8245,6 +8477,25 @@ def main():
                     for source in sources:
                         st.markdown(f"- {source}")
 
+            # GENERATE_DOCUMENT's real .docx file - offered as a
+            # direct download right under the answer. Read from disk
+            # fresh (not cached) since it was just written this turn
+            # by document_generator.generate_document_evidence().
+            generated_document = st.session_state.get("last_generated_document")
+
+            if generated_document:
+                try:
+                    with open(generated_document["path"], "rb") as file_handle:
+                        st.download_button(
+                            label=f"⬇️ Download {generated_document['filename']}",
+                            data=file_handle.read(),
+                            file_name=generated_document["filename"],
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"download_{generated_document['filename']}",
+                        )
+                except Exception as error:
+                    st.warning(f"Document was generated but couldn't be attached for download: {error}")
+
             # Captured here (immediately after generation) rather
             # than read again down at the save step below, since
             # last_route/last_sources are single global slots that
@@ -8252,6 +8503,7 @@ def main():
             # could in principle overwrite before we get there.
             answer_route = st.session_state.get("last_route")
             answer_sources = st.session_state.get("last_sources")
+            answer_generated_file = st.session_state.get("last_generated_document")
 
         except Exception as error:
 
@@ -8279,6 +8531,7 @@ def main():
             "content": answer,
             "route": answer_route,
             "sources": answer_sources,
+            "generated_file": answer_generated_file,
         }
     )
 
@@ -8288,6 +8541,7 @@ def main():
         answer,
         route=answer_route,
         sources=answer_sources,
+        generated_file=answer_generated_file,
     )
 
     # ================================
