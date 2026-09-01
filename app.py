@@ -1410,6 +1410,21 @@ def initialise_session():
         st.session_state.view = "chat"
 
 
+# Routes whose prompts are evidence-grounded (the model is meant to
+# report/rephrase real retrieved data, not be creative) - these get
+# temperature 0 on every backend so a random high-temperature sample
+# doesn't introduce a fact the grounding rules didn't ask for. RECOMMEND
+# is here because a "personalized recommendation" is only as good as
+# its grounding in real evidence - the whole point of that agent is
+# that every fact it states must be verifiable, not just plausible.
+# Kept as one shared constant so all three backends (Ollama/Groq/
+# Gemini) treat RECOMMEND identically instead of drifting apart.
+_GROUNDED_ROUTES = (
+    "WEB", "DOCUMENT", "MAIL", "MEETINGS", "SELF_INFO", "PLAN",
+    "AUTO_EXECUTE", "RECOMMEND",
+)
+
+
 def get_gemini_history():
     """Convert stored messages into Gemini SDK format."""
     return [
@@ -1454,11 +1469,20 @@ def stream_response(api_key, model_name, question):
 
     generation_start = time.perf_counter()
 
+    # Same deterministic-for-grounded-routes rule as Ollama (see
+    # _GROUNDED_ROUTES) - Gemini was previously left at its default
+    # temperature even for RECOMMEND/MAIL/MEETINGS/etc, so its
+    # answers on those routes could drift further from the evidence
+    # than the local model's did for no reason other than which
+    # backend happened to be selected.
+    gemini_temperature = 0.0 if route in _GROUNDED_ROUTES else 0.7
+
     response = client.models.generate_content_stream(
         model=model_name,
         contents=[{"role": "user", "parts": [{"text": prompt}]}],
         config={
             "system_instruction": SYSTEM_INSTRUCTION,
+            "temperature": gemini_temperature,
             # Only useful for the WEB route now that MAIL/MEETINGS/
             # DOCUMENT questions are grounded via build_routed_prompt()
             # above - live web results still help general/current-
@@ -1497,7 +1521,10 @@ def stream_response(api_key, model_name, question):
         retry_response = client.models.generate_content(
             model=model_name,
             contents=[{"role": "user", "parts": [{"text": retry_prompt}]}],
-            config={"system_instruction": SYSTEM_INSTRUCTION},
+            config={
+                "system_instruction": SYSTEM_INSTRUCTION,
+                "temperature": 0.0,
+            },
         )
         return retry_response.text or ""
 
@@ -1548,6 +1575,13 @@ def groq_stream_response(api_key, model_name, question):
 
     generation_start = time.perf_counter()
 
+    # Same deterministic-for-grounded-routes rule as Ollama/Gemini
+    # (see _GROUNDED_ROUTES) - Groq was previously left at its
+    # default temperature for every route, including RECOMMEND,
+    # where an unconstrained sample is exactly what invents vendors/
+    # names the grounding check then has to catch after the fact.
+    groq_temperature = 0.0 if route in _GROUNDED_ROUTES else 0.7
+
     response = GROQ_SESSION.post(
         GROQ_URL,
         headers={
@@ -1557,6 +1591,7 @@ def groq_stream_response(api_key, model_name, question):
         json={
             "model": model_name,
             "messages": messages,
+            "temperature": groq_temperature,
             "stream": True,
         },
         stream=True,
@@ -1628,6 +1663,7 @@ def groq_stream_response(api_key, model_name, question):
             json={
                 "model": model_name,
                 "messages": [{"role": "user", "content": retry_prompt}],
+                "temperature": 0.0,
                 "stream": False,
             },
             timeout=60,
@@ -1892,6 +1928,11 @@ STARTER_SUGGESTIONS = [
     "Help me plan my week",
     "Search the web for something",
     "Quiz me on a topic",
+    # Surfaces the Recommendation Agent (route_query() -> "RECOMMEND")
+    # as a discoverable starter - previously the only way to find it
+    # was to already know the right phrasing, since no starter chip
+    # pointed at it.
+    "What should I focus on today?",
 ]
 
 
@@ -4363,6 +4404,91 @@ def _format_expense_evidence(question):
 # told to say so honestly instead of manufacturing a recommendation.
 # =========================================================
 
+# Cross-chat memory for the Recommendation Agent - looks at the
+# user's OTHER conversations (not the one currently open), so a
+# brand-new chat can still say "you were in the middle of X" instead
+# of starting from zero every time a chat is closed and reopened.
+# Real, literal quotes from the user's own past messages (pulled
+# straight from the same SQLite store the chat sidebar/history reads
+# from - get_chats()/load_chat_messages(), no separate store or LLM
+# summarization step) - never a model-generated guess at what a past
+# chat was "about". If the user never asked NOVA anything meaningful
+# in a past chat, this evidence is simply absent.
+_CHAT_HISTORY_MAX_PAST_CHATS = 5
+_CHAT_HISTORY_MAX_MESSAGES_PER_CHAT = 2
+_CHAT_HISTORY_MAX_MESSAGE_CHARS = 160
+
+
+def _gather_chat_history_evidence(current_chat_id):
+    """
+    Returns (context_chunk, sources) built from the user's most
+    recent OTHER chat sessions - up to _CHAT_HISTORY_MAX_PAST_CHATS
+    chats, each contributing up to
+    _CHAT_HISTORY_MAX_MESSAGES_PER_CHAT of the user's own most
+    recent messages in that chat (never the assistant's replies -
+    only what the USER actually typed counts as a real topic here).
+
+    Returns ("", []) if there's no other chat with any user message
+    - a brand-new install, or a user who has only ever used the one
+    open chat, has nothing here to surface, and that's the correct
+    (honest) result rather than manufacturing something.
+    """
+
+    try:
+        chats = get_chats()
+    except Exception:
+        return "", []
+
+    other_chats = [
+        chat for chat in chats if chat[0] != current_chat_id
+    ][:_CHAT_HISTORY_MAX_PAST_CHATS]
+
+    if not other_chats:
+        return "", []
+
+    chunk_lines = []
+    sources = []
+
+    for chat_id, title, created_at in other_chats:
+
+        try:
+            messages = load_chat_messages(chat_id)
+        except Exception:
+            continue
+
+        user_messages = [
+            message.get("content", "").strip()
+            for message in messages
+            if message.get("role") == "user" and message.get("content", "").strip()
+        ]
+
+        if not user_messages:
+            continue
+
+        recent_user_messages = user_messages[-_CHAT_HISTORY_MAX_MESSAGES_PER_CHAT:]
+
+        chunk_lines.append(f"FROM CHAT \"{title}\" ({created_at}):")
+
+        for raw_message in recent_user_messages:
+            trimmed = raw_message[:_CHAT_HISTORY_MAX_MESSAGE_CHARS]
+            if len(raw_message) > _CHAT_HISTORY_MAX_MESSAGE_CHARS:
+                trimmed += "..."
+            chunk_lines.append(f'- "{trimmed}"')
+            sources.append(f'Past chat "{title}": "{trimmed}"')
+
+    if not chunk_lines:
+        return "", []
+
+    context_chunk = (
+        "RECENT TOPICS FROM YOUR OTHER CONVERSATIONS (context only - "
+        "these are NOT pending items, just things you talked about "
+        "elsewhere; use only to suggest an optional follow-up, never "
+        "as an action item)\n" + "\n".join(chunk_lines)
+    )
+
+    return context_chunk, sources
+
+
 def _infer_frequent_value(records, field, min_count=2):
     """
     Returns (value, count) for the most common `field` value across
@@ -4551,20 +4677,51 @@ def _gather_recommendation_evidence():
         days_pending = _days_since(request.get("requested_at"))
         is_stale = days_pending is not None and days_pending >= _RECOMMENDATION_STALE_AFTER_DAYS
 
-        if is_stale:
+        # A leave request whose actual DATE WINDOW has already ended
+        # with no approval on record is a different situation from
+        # "still waiting, worth a nudge" - following up on an
+        # APPROVAL for time off that has already happened (or not)
+        # doesn't make sense as advice, and repeating "may be worth a
+        # follow-up" for it every single day forever (days_pending
+        # only ever goes up) is exactly the "keeps suggesting past
+        # leave requests" complaint. Checked before the days_pending
+        # staleness check below so a passed window always wins.
+        window_end_str = request.get("end") or request.get("start")
+        window_has_passed = False
+        if window_end_str:
+            try:
+                window_has_passed = (
+                    datetime.strptime(window_end_str, "%Y-%m-%d").date()
+                    < datetime.now().date()
+                )
+            except ValueError:
+                window_has_passed = False
+
+        if window_has_passed:
+            status_line = (
+                f"STATUS: this leave window already ended "
+                f"({window_end_str}) with no approval ever recorded - "
+                f"following up on the APPROVAL no longer makes sense; "
+                f"WORTH CHECKING WHETHER IT NEEDS TO BE CANCELLED OR "
+                f"RESUBMITTED instead"
+            )
+            source_verb = "window already passed - may need cancelling/resubmitting"
+        elif is_stale:
             status_line = (
                 f"STATUS: pending {days_pending} day(s), no response yet - "
                 f"MAY BE WORTH A FOLLOW-UP"
             )
+            source_verb = "may need a follow-up"
         else:
             status_line = (
                 f"STATUS: awaiting approval "
                 f"(submitted {days_pending if days_pending is not None else '?'} "
                 f"day(s) ago) - no action needed from you yet"
             )
+            source_verb = "awaiting approval"
 
         preference_line = ""
-        if is_stale:
+        if is_stale or window_has_passed:
             pref_text, pref_match = _preference_evidence_line(
                 leave_preference, request.get("leave_type"), len(leave_history),
                 "leave type", "leave",
@@ -4580,7 +4737,7 @@ def _gather_recommendation_evidence():
         sources.append(
             f"Your {request.get('leave_type', 'N/A')} leave request "
             f"({request.get('start', 'N/A')} to {request.get('end', 'N/A')}) - "
-            + ("may need a follow-up" if is_stale else "awaiting approval")
+            + source_verb
         )
 
     for request in get_pending_expense_requests():
@@ -4636,11 +4793,38 @@ def _gather_recommendation_evidence():
         except (TypeError, ValueError):
             continue
 
-    # ---- Meetings in the next 3 days ----
+    # ---- Meetings - TODAY specifically, using the exact same
+    # function the real Meetings Agent route uses for its authoritative
+    # "what's actually on today" answer (get_events_on_date - see the
+    # MEETINGS branch above, where this is the source of truth for
+    # "am I free today?"/status questions, precisely because it isn't
+    # subject to search_meetings()'s keyword-ranking/truncation, which
+    # can silently drop or misplace an in-window event - see that
+    # branch's comments). Kept separate from, and ranked above, the
+    # 3-day window below: a meeting happening TODAY is a different
+    # (more time-critical, "go prepare now") kind of actionable than
+    # one two or three days out. ----
 
     try:
         today = datetime.now().date()
-        upcoming = get_events_in_range(today, today + timedelta(days=3))
+        todays_events = get_events_on_date(today, user="me")
+    except Exception:
+        todays_events = []
+
+    if todays_events:
+        chunks.append(
+            "MEETINGS TODAY\n" + "\n".join(todays_events[:10])
+        )
+        sources.append(f"{len(todays_events)} meeting(s) today")
+
+    # ---- Meetings in the next 3 days (includes today - this is the
+    # broader "what's coming up" context; MEETINGS TODAY above is the
+    # higher-priority subset of the same data). ----
+
+    try:
+        upcoming = get_events_in_range(
+            today, today + timedelta(days=3), user="me"
+        )
     except Exception:
         upcoming = []
 
@@ -4666,8 +4850,24 @@ def _gather_recommendation_evidence():
         mail_context, mail_sources = "", []
 
     if mail_context:
-        flagged_sources, passive_sources = [], []
+        # Dedup by the exact source string before splitting - search_mail()
+        # has been observed returning the same message more than once
+        # (e.g. a bounce/mailer-daemon notification indexed as separate
+        # chunks, or genuinely re-delivered). Without this, the SAME
+        # real email turns into several near-identical numbered
+        # recommendations in the final answer - not a fabrication (the
+        # evidence really does contain that text), but not presentable
+        # either. Order-preserving dedup, so the first occurrence's
+        # position is kept.
+        seen_sources = set()
+        deduped_mail_sources = []
         for source in mail_sources:
+            if source not in seen_sources:
+                seen_sources.add(source)
+                deduped_mail_sources.append(source)
+
+        flagged_sources, passive_sources = [], []
+        for source in deduped_mail_sources:
             subject = source.split(" - ", 1)[0].lower()
             if any(signal in subject for signal in _MAIL_ACTION_SIGNALS):
                 flagged_sources.append(source)
@@ -4731,6 +4931,21 @@ def _gather_recommendation_evidence():
             )
         )
         sources.append(f"{len(expense_history)} expense claim(s) on record")
+
+    # ---- Cross-chat memory - what the user has talked about in
+    # OTHER conversations (see _gather_chat_history_evidence). This
+    # is the only evidence block that isn't a pending item or a
+    # record from this app's own data stores - it's a soft, optional
+    # follow-up signal, never something the RECOMMEND prompt is
+    # allowed to rank as a genuine to-do. ----
+
+    chat_history_chunk, chat_history_sources = _gather_chat_history_evidence(
+        st.session_state.get("current_chat_id")
+    )
+
+    if chat_history_chunk:
+        chunks.append(chat_history_chunk)
+        sources.extend(chat_history_sources)
 
     return "\n\n====================\n\n".join(chunks), sources
 
@@ -6028,6 +6243,17 @@ no response, and Staples is your most-used vendor - worth a nudge.
 This is correct because "Staples" and "5 days" are copied literally
 from the evidence, not templated.
 
+SECOND WORKED EXAMPLE, for a meeting (same illustrative-only rule -
+copy the FORMAT, never these specific words):
+Evidence contains: "MEETINGS TODAY\n2:00 PM - Q3 Roadmap Review with
+Priya"
+Correct output for that item:
+1. **Prepare for your 2:00 PM Q3 Roadmap Review with Priya.** It's
+on your calendar today.
+This is correct because "2:00 PM", "Q3 Roadmap Review", and "Priya"
+are all copied literally from that evidence line - the item names
+the actual meeting, not a generic mention of "today's meetings".
+
 If you cannot find a required fact in the evidence, do not write
 that recommendation at all; leaving it out is correct, guessing or
 templating is not. Nothing above this line (including any name
@@ -6039,13 +6265,25 @@ OTHER RULES: Every evidence item already tells you how to treat it -
 follow that literally, don't override it with your own judgment:
 - An item whose STATUS line says "MAY BE WORTH A FOLLOW-UP" is a
   genuine recommendation.
+- An item whose STATUS line says "WORTH CHECKING WHETHER IT NEEDS TO
+  BE CANCELLED OR RESUBMITTED" (leave requests only) is a genuine
+  recommendation too, but a DIFFERENT one from a normal follow-up:
+  the leave window already ended before anyone approved it, so
+  never tell the user to "follow up" or "check on approval" for
+  this item - say instead that the window has passed and they
+  should confirm whether the time off happened and cancel or
+  resubmit the request as appropriate.
 - An item whose STATUS line says "no action needed from you yet"
   is a fresh submission the user already knows about - only
   mention it if the user explicitly asked for a status check
   ("what's pending", "catch me up"), and even then frame it as
   status, not a to-do.
 - LOW LEAVE BALANCE and UPCOMING MEETINGS are always genuine,
-  actionable recommendations.
+  actionable recommendations. A "MEETINGS TODAY" item is the same
+  kind of fact as "UPCOMING MEETINGS (next 3 days)" but more urgent -
+  it's happening today, not in the next few days - so treat it as
+  genuinely actionable too, and rank it above the general upcoming-
+  meetings block (see FORMAT below).
 - "MAIL THAT MAY NEED A RESPONSE" items are real subject-line
   signals - treat them as a recommendation. The "RECENT MAIL
   (context only...)" block and any "(context only...)" HISTORY
@@ -6053,6 +6291,11 @@ follow that literally, don't override it with your own judgment:
   a bullet point on its own; use it solely to add a sentence of
   support to a recommendation you're already making from a
   non-context item.
+- "RECENT TOPICS FROM YOUR OTHER CONVERSATIONS" is a different kind
+  of context-only block from the ones above - it is NEVER a
+  numbered recommendation and never described as pending/urgent.
+  It only ever produces the separate "You might also want to
+  continue:" section described under FORMAT below.
 - A "HISTORY/PREFERENCE MATCH" line means a real, repeated pattern
   in the user's own past requests applies to THIS item and is part
   of why it's prioritized - treat it as genuinely influencing rank,
@@ -6074,8 +6317,12 @@ first, in this order:
    one without, since the repeated pattern is itself a reason to
    act on it sooner.
 3. LOW LEAVE BALANCE items.
-4. UPCOMING MEETINGS - reference the count/timing from the
-   evidence so the user knows what to prepare for.
+4. MEETINGS TODAY items - these are same-day, so they rank above the
+   general upcoming-meetings block below; reference the actual
+   time/subject from the evidence so the user knows what to prepare
+   for.
+5. UPCOMING MEETINGS (next 3 days) - reference the count/timing from
+   the evidence so the user knows what's coming up.
 Within that order, group items from the same category together
 rather than interleaving them, and skip a category entirely if the
 evidence has nothing for it. If the user asked about one specific
@@ -6089,26 +6336,60 @@ from that item's own evidence block, and must never say the same
 fact twice:
 - A bolded, direct action recommendation (an imperative sentence
   telling the user what to do, naming only the specific vendor,
-  sender, leave type, or subject line copied from that evidence
-  item - never a bare restatement of the evidence like "Your PO is
-  pending", and never a name/entity from anywhere other than that
-  evidence item).
+  sender, leave type, subject line, or - for a MEETINGS TODAY /
+  UPCOMING MEETINGS item - the specific meeting title/subject and
+  attendee(s) exactly as they appear in that evidence line, copied
+  from that evidence item - never a bare restatement of the evidence
+  like "Your PO is pending" or "You have meetings today", and never
+  a name/entity from anywhere other than that evidence item). For a
+  meeting item specifically, this means naming the actual meeting
+  (e.g. "Prepare for your meeting with Priya on the Q3 roadmap"),
+  not a generic mention of "today's meetings" - if the evidence line
+  for that meeting doesn't contain an attendee or subject, name
+  whatever it does contain (the time, or the event title alone)
+  rather than writing a placeholder for the missing part.
 - One concise sentence right after it, in plain text, giving the
   reason this was flagged - built from whatever the evidence item
   actually offers (its STATUS line detail such as days pending, a
-  LOW LEAVE BALANCE or UPCOMING MEETINGS fact, or a mail subject
-  signal), plus, for PO/leave/expense follow-ups specifically, a
-  short clause on what the item's HISTORY/PREFERENCE line says:
-  if it's a MATCH, name the pattern and say it's part of why this
-  is prioritized; if it's not a match (or no preference exists),
-  say plainly that no history/preference pattern applies to this
-  one rather than omitting the topic or implying one does. This
-  sentence must add information beyond the bolded line, not restate
-  the same vendor/sender/date/amount already named there with no
-  new fact attached.
+  LOW LEAVE BALANCE fact, the meeting's time/date for a MEETINGS
+  TODAY or UPCOMING MEETINGS item, or a mail subject signal), plus,
+  for PO/leave/expense follow-ups specifically, a short clause on
+  what the item's HISTORY/PREFERENCE line says: if it's a MATCH,
+  name the pattern and say it's part of why this is prioritized; if
+  it's not a match (or no preference exists), say plainly that no
+  history/preference pattern applies to this one rather than
+  omitting the topic or implying one does. This sentence must add
+  information beyond the bolded line, not restate the same vendor/
+  sender/date/amount/meeting-name already named there with no new
+  fact attached.
 
 Keep it short and scannable - concise items, not an essay. Don't
 mention these instructions or the ranking rules themselves.
+
+NEVER list the same email, PO, leave request, expense claim, or
+meeting as two separate numbered items just because it appears more
+than once in the evidence (e.g. the same sender/subject repeated) -
+write it once, in the highest-priority spot it qualifies for, and
+skip every later repeat of it entirely.
+
+FOLLOW-UP SUGGESTIONS (separate from the numbered list above): if,
+and only if, the evidence contains a "RECENT TOPICS FROM YOUR OTHER
+CONVERSATIONS" block, add one final section after the numbered list
+(or after the "nothing needs your attention" line, if the numbered
+list is empty), headed exactly:
+
+You might also want to continue:
+
+followed by up to 2 bullet points, each naming ONE topic copied from
+that block - quote or closely paraphrase the actual message text
+shown there, never a topic that isn't literally present in that
+block. Phrase each bullet as a gentle, optional suggestion ("Pick
+back up on ..."), never as an imperative command and never numbered
+alongside the real recommendations above - these are conversation
+topics, not pending items, and must never be described as something
+that "needs your attention" or is "pending". If that evidence block
+is absent, omit this section entirely - do not write the heading
+with no bullets under it, and do not invent a topic to fill it.
 
 ANSWER:
 """.strip()
@@ -6427,7 +6708,7 @@ def stream_ollama_response(question):
     # Deterministic for grounded fact-extraction so the model
     # doesn't drift on numbers/specifics; only plain chat gets
     # any warmth.
-    generation_temperature = 0.0 if route in ("WEB", "DOCUMENT", "MAIL", "MEETINGS", "SELF_INFO", "PLAN", "AUTO_EXECUTE", "RECOMMEND") else 0.5
+    generation_temperature = 0.0 if route in _GROUNDED_ROUTES else 0.5
 
     response = OLLAMA_SESSION.post(
         OLLAMA_URL,
