@@ -2055,7 +2055,18 @@ _FOLLOWUP_REFERENTIAL_RE = re.compile(
     r"he|she|him|her|his|hers)\b"
 )
 
-_FOLLOWUP_ELIGIBLE_ROUTES = ("MAIL", "MEETINGS", "DOCUMENT", "WEB")
+_FOLLOWUP_ELIGIBLE_ROUTES = (
+    "MAIL", "MEETINGS", "DOCUMENT", "WEB",
+    # A short follow-up right after a report/document was generated
+    # ("i need a pdf", "make that a docx too") has no topical keyword
+    # of its own, so without these it fell through to the LLM router
+    # fallback - which tended to mislabel it DOCUMENT (a RAG lookup
+    # over uploaded files) instead of re-invoking the generator. That
+    # produced a hallucinated "your report is ready" answer with no
+    # actual file attached, since the DOCUMENT route never touches
+    # report_generator.py/document_generator.py at all.
+    "GENERATE_REPORT", "GENERATE_DOCUMENT",
+)
 
 
 def is_followup_question(question, previous_route):
