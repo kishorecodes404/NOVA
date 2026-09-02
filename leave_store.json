@@ -17,6 +17,28 @@
       "reason": "apply a sick leave tomorrow",
       "status": "pending",
       "requested_at": "2026-09-01T14:22:39"
+    },
+    {
+      "id": "9dac2450-2a8e-4bb7-b607-caa7adabdbad",
+      "user": "me",
+      "leave_type": "sick",
+      "start": "2026-09-04",
+      "end": "2026-09-04",
+      "days": 1,
+      "reason": "I am sick and unable to work.",
+      "status": "pending",
+      "requested_at": "2026-09-01T17:20:59"
+    },
+    {
+      "id": "95c7f82b-82ef-4858-8b2e-38752aa2ddef",
+      "user": "me",
+      "leave_type": "sick",
+      "start": "2026-09-03",
+      "end": "2026-09-03",
+      "days": 1,
+      "reason": "apply a sick leave tomorrow",
+      "status": "pending",
+      "requested_at": "2026-09-02T10:34:58"
     }
   ]
 }

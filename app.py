@@ -129,6 +129,23 @@ import autonomous_executor
 import document_generator
 
 # ---------------------------------------------------
+# Report Generation Agent
+#
+# Sibling to document_generator.py above: instead of one real record
+# (one PO, one leave letter, ...), this rolls up PO/Meetings/Leave/
+# Expense data over a date window into a single, multi-section
+# Project Status Report - generated in all three requested formats
+# (.docx/.pdf/.xlsx) at once. Wired into the "GENERATE_REPORT" route
+# below, checked before GENERATE_DOCUMENT so a "generate a weekly
+# status report" request is never mistaken for a single-record
+# document. See report_generator.py's module docstring for the full
+# data-collection -> validation -> template -> multi-format-generation
+# flow, and for why it does NOT have a Task section backed by real
+# data (no Task agent/store exists in rag.py yet).
+# ---------------------------------------------------
+import report_generator
+
+# ---------------------------------------------------
 # Timing log
 #
 # Writes straight to a file next to app.py, so it's findable
@@ -1455,7 +1472,7 @@ def initialise_session():
 # Gemini) treat RECOMMEND identically instead of drifting apart.
 _GROUNDED_ROUTES = (
     "WEB", "DOCUMENT", "MAIL", "MEETINGS", "SELF_INFO", "PLAN",
-    "AUTO_EXECUTE", "RECOMMEND", "GENERATE_DOCUMENT",
+    "AUTO_EXECUTE", "RECOMMEND", "GENERATE_DOCUMENT", "GENERATE_REPORT",
 )
 
 
@@ -1501,7 +1518,7 @@ def stream_response(api_key, model_name, question):
     # API call here means a Gemini outage or quota issue can never
     # strand an already-generated, already-downloadable .docx behind
     # a failed chat reply.
-    if route == "GENERATE_DOCUMENT":
+    if route in ("GENERATE_DOCUMENT", "GENERATE_REPORT"):
         yield st.session_state.get(
             "last_generate_document_confirmation"
         ) or "Document generated."
@@ -1609,8 +1626,8 @@ def groq_stream_response(api_key, model_name, question):
     )
 
     # See the matching short-circuit in stream_response() (Gemini) -
-    # GENERATE_DOCUMENT never needs an LLM call at all.
-    if route == "GENERATE_DOCUMENT":
+    # GENERATE_DOCUMENT/GENERATE_REPORT never need an LLM call at all.
+    if route in ("GENERATE_DOCUMENT", "GENERATE_REPORT"):
         yield st.session_state.get(
             "last_generate_document_confirmation"
         ) or "Document generated."
@@ -2165,6 +2182,21 @@ def route_query(question, conversation_history=""):
     # noun, so ordinary status questions ("what's my leave balance")
     # never land here.
     # =========================================================
+
+    # =========================================================
+    # FAST GENERATE-REPORT ROUTING
+    #
+    # "generate/prepare a weekly project status report" - a rolled-up,
+    # multi-agent REPORT (see report_generator.py), distinct from
+    # GENERATE_DOCUMENT's single-record documents below. Checked
+    # FIRST so a status-report request is never swallowed by
+    # document_generator.looks_like_document_generation_request()'s
+    # generic "a document"/"a copy" fallback.
+    # =========================================================
+
+    if report_generator.looks_like_report_generation_request(question):
+        log_timing("route_query -> 'GENERATE_REPORT' (fast)")
+        return "GENERATE_REPORT"
 
     if document_generator.looks_like_document_generation_request(question):
         log_timing("route_query -> 'GENERATE_DOCUMENT' (fast)")
@@ -3178,6 +3210,70 @@ JSON:""".strip()
     }, None
 
 
+_LEAVE_DATE_MONTH_NAMES = (
+    "january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december",
+)
+
+
+def _resolve_relative_leave_date(question):
+    """
+    Deterministic (non-LLM) override for the single most common and
+    highest-stakes case in a leave request: a bare "today" or
+    "tomorrow" with nothing else that could name a different or
+    additional date. Mirrors _resolve_meetings_query_date()'s
+    reasoning below - simple relative-date arithmetic should never be
+    left to an LLM to compute, since an off-by-one there means the
+    request gets filed against a different calendar day than the
+    person meant (observed in practice: "apply for sick leave
+    tomorrow" was extracted with a start_date one day later than the
+    actual tomorrow).
+
+    Returns a date only when the question is unambiguously a single
+    relative day - exactly one of "today"/"tomorrow" appears (fuzzy-
+    matched, same helper _resolve_meetings_query_date uses), and
+    nothing else in the question looks like it could be naming a
+    different or additional date: no weekday name, no month name, no
+    digit, and no range word ("to"/"through"/"until"/"till"). This
+    only ever narrows what gets overridden - a question with any of
+    those returns None and the model's own date extraction is used
+    unchanged, exactly as before this override existed.
+
+    Deliberately defined right next to extract_leave_fields() (the
+    only caller) rather than beside _resolve_meetings_query_date(),
+    which this reuses the fuzzy-matching helpers from - Python
+    resolves both calls at call time, so definition order here
+    doesn't matter, but proximity to the one call site does for
+    anyone reading this file top to bottom.
+    """
+
+    today = datetime.now().date()
+    tokens = re.findall(r"[a-z]+", question.lower())
+
+    has_tomorrow = _tokens_fuzzy_contain(tokens, "tomorrow")
+    has_today = _tokens_fuzzy_contain(tokens, "today")
+    if has_tomorrow == has_today:  # neither mentioned, or both (ambiguous) - bail
+        return None
+
+    # Deliberately an EXACT membership check here, not the fuzzy
+    # match used for "today"/"tomorrow" above: fuzzy-matching "today"
+    # itself against weekday names produces a false collision
+    # (Levenshtein("today", "monday") == 2, inside that name's own
+    # typo-tolerance threshold), which would wrongly treat a plain
+    # "today" request as also naming Monday and bail out. A missed
+    # typo'd weekday/month name here just means an ambiguous request
+    # falls through to the model as before - far safer than breaking
+    # the plain "today" case entirely.
+    if any(name in tokens for name in _WEEKDAY_NAMES + _LEAVE_DATE_MONTH_NAMES):
+        return None
+    if any(word in tokens for word in ("to", "through", "until", "till")):
+        return None
+    if re.search(r"\d", question):
+        return None
+
+    return today + timedelta(days=1) if has_tomorrow else today
+
+
 def extract_leave_fields(question):
     """
     Pulls structured leave-request fields (leave_type/start/end/
@@ -3237,6 +3333,17 @@ JSON:""".strip()
         end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
     except ValueError:
         return None, "I couldn't work out the date(s) for that leave request - could you give an explicit date or range?"
+
+    # Deterministic override for the simple, high-frequency "today"/
+    # "tomorrow" case - see _resolve_relative_leave_date() above. The
+    # extraction model otherwise stays in charge of date parsing
+    # (ranges, weekdays, explicit dates); a bare "tomorrow" is common
+    # enough, and costly enough to get wrong by a day, that it's
+    # resolved in Python instead of trusted to model arithmetic.
+    relative_override = _resolve_relative_leave_date(question)
+    if relative_override is not None:
+        start_date = relative_override
+        end_date = relative_override
 
     # "me" - the primary configured user, same convention as
     # schedule_meeting()/check_group_availability() default. NOVA is
@@ -6147,6 +6254,42 @@ def build_routed_prompt(question, conversation_history):
             f"{time.perf_counter() - retrieval_start:.2f}s"
         )
 
+    elif route == "GENERATE_REPORT":
+
+        # report_generator.generate_report_evidence() collects real
+        # PO/Meetings/Leave/Expense data across a date window,
+        # validates it, applies the shared template, and writes the
+        # actual .docx/.pdf/.xlsx files to disk - see that module's
+        # docstring. Unlike GENERATE_DOCUMENT above, a writer-model
+        # outage does NOT fail this route outright: the Executive
+        # Summary falls back to a deterministic sentence built from
+        # the same real counts, so the multi-agent report can still
+        # be produced end-to-end. generated_report is None only when
+        # no data could be found at all, or every output format
+        # failed to build.
+        try:
+            context, sources, generated_report, generated_report_confirmation = (
+                report_generator.generate_report_evidence(
+                    question,
+                    conversation_history,
+                    llm_writer=_call_document_writer_model,
+                )
+            )
+        except Exception as error:
+            log_timing(f"generate_report_evidence FAILED: {error}")
+            context = f"Report generation failed: {error}"
+            sources = []
+            generated_report = None
+            generated_report_confirmation = (
+                "Sorry, I ran into a problem generating that report. "
+                "Please try again."
+            )
+
+        log_timing(
+            f"report generation evidence gathered in "
+            f"{time.perf_counter() - retrieval_start:.2f}s"
+        )
+
     elif route == "RECOMMEND":
 
         try:
@@ -6478,6 +6621,16 @@ ANSWER:
         # in case anything ever inspects it before that short-circuit.
         prompt = generated_document_confirmation or context
 
+    elif route == "GENERATE_REPORT":
+
+        # Same reasoning as GENERATE_DOCUMENT just above -
+        # generated_report_confirmation (set above, in the
+        # evidence-gathering block) is already a deterministic/fact-
+        # verified sentence, and every backend short-circuits before
+        # `prompt` is ever sent to a model. Kept here only so `prompt`
+        # is always a string.
+        prompt = generated_report_confirmation or context
+
     elif route == "RECOMMEND":
 
         today_line = datetime.now().strftime("%A, %Y-%m-%d")
@@ -6767,23 +6920,33 @@ Answer naturally and concisely.
     )
 
     # The real .docx file_info from document_generator.generate_
-    # document_evidence() (path/filename/doc_type), or None if no
-    # file was produced this turn - read by main() right after the
-    # answer streams, to render a download button next to the
-    # route badge. Cleared on every non-GENERATE_DOCUMENT turn so a
-    # stale download button doesn't linger under a later answer.
-    st.session_state.last_generated_document = (
-        generated_document if route == "GENERATE_DOCUMENT" else None
-    )
+    # document_evidence() (path/filename/doc_type), or the real
+    # {"files": [...]} multi-format info from report_generator.
+    # generate_report_evidence() for GENERATE_REPORT, or None if
+    # nothing was produced this turn - read by main() right after the
+    # answer streams, to render download button(s) next to the route
+    # badge. Cleared on every other turn so a stale download button
+    # doesn't linger under a later answer. Both routes share this one
+    # slot (and the matching DB column) - main()'s render code tells
+    # them apart by whether the dict has a "files" key.
+    if route == "GENERATE_DOCUMENT":
+        st.session_state.last_generated_document = generated_document
+    elif route == "GENERATE_REPORT":
+        st.session_state.last_generated_document = generated_report
+    else:
+        st.session_state.last_generated_document = None
 
-    # The ready-to-show, LLM-free confirmation sentence for
-    # GENERATE_DOCUMENT - read by stream_ollama_response()/
-    # groq_stream_response()/stream_response() to short-circuit
-    # before ever calling their respective model APIs (see the
-    # comment in the GENERATE_DOCUMENT prompt branch above).
-    st.session_state.last_generate_document_confirmation = (
-        generated_document_confirmation if route == "GENERATE_DOCUMENT" else None
-    )
+    # The ready-to-show, LLM-free (or fact-verified) confirmation
+    # sentence for GENERATE_DOCUMENT/GENERATE_REPORT - read by
+    # stream_ollama_response()/groq_stream_response()/stream_response()
+    # to short-circuit before ever calling their respective model APIs
+    # (see the comment in the GENERATE_DOCUMENT prompt branch above).
+    if route == "GENERATE_DOCUMENT":
+        st.session_state.last_generate_document_confirmation = generated_document_confirmation
+    elif route == "GENERATE_REPORT":
+        st.session_state.last_generate_document_confirmation = generated_report_confirmation
+    else:
+        st.session_state.last_generate_document_confirmation = None
 
     return route, sources, prompt
 
@@ -7040,7 +7203,7 @@ def stream_ollama_response(question):
     # a flaky/overloaded local server should ever be able to strand
     # an already-generated, already-downloadable file behind a
     # failed chat reply.
-    if route == "GENERATE_DOCUMENT":
+    if route in ("GENERATE_DOCUMENT", "GENERATE_REPORT"):
         yield st.session_state.get(
             "last_generate_document_confirmation"
         ) or "Document generated."
@@ -7958,6 +8121,7 @@ def main():
                     "AUTO_EXECUTE": "🤖 Autonomous Agent",
                     "RECOMMEND": "✨ Recommendation Agent",
                     "GENERATE_DOCUMENT": "📝 Document Generator",
+                    "GENERATE_REPORT": "📊 Report Generator",
                 }.get(message.get("route"), None)
 
                 if route_badge:
@@ -7970,26 +8134,44 @@ def main():
                         for source in message_sources:
                             st.markdown(f"- {source}")
 
-                # Re-offer the download for a document generated in
-                # an earlier turn, as long as the file is still on
-                # disk (generated_documents/ isn't pruned, but a
-                # fresh deploy or manual cleanup can remove it - the
-                # try/except below just skips the button silently
+                # Re-offer the download for a document/report
+                # generated in an earlier turn, as long as the file is
+                # still on disk (generated_documents/ isn't pruned,
+                # but a fresh deploy or manual cleanup can remove it -
+                # the try/except below just skips the button silently
                 # rather than breaking the whole history redraw).
+                #
+                # Two shapes share this one "generated_file" slot (see
+                # build_routed_prompt()'s session-state comment):
+                # GENERATE_DOCUMENT's single {"path","filename",...}
+                # dict, and GENERATE_REPORT's {"files": [...]} list of
+                # one entry per format actually produced (docx/pdf/
+                # xlsx). Render one button per file either way.
                 message_generated_file = message.get("generated_file")
 
-                if message_generated_file and os.path.exists(message_generated_file.get("path", "")):
-                    try:
-                        with open(message_generated_file["path"], "rb") as file_handle:
-                            st.download_button(
-                                label=f"⬇️ Download {message_generated_file['filename']}",
-                                data=file_handle.read(),
-                                file_name=message_generated_file["filename"],
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                key=f"history_download_{message_generated_file['filename']}",
-                            )
-                    except Exception:
-                        pass
+                if message_generated_file:
+                    entries = (
+                        message_generated_file["files"]
+                        if "files" in message_generated_file
+                        else [message_generated_file]
+                    )
+                    for entry in entries:
+                        if not os.path.exists(entry.get("path", "")):
+                            continue
+                        try:
+                            with open(entry["path"], "rb") as file_handle:
+                                st.download_button(
+                                    label=f"⬇️ Download {entry['filename']}",
+                                    data=file_handle.read(),
+                                    file_name=entry["filename"],
+                                    mime=entry.get(
+                                        "mime",
+                                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    ),
+                                    key=f"history_download_{entry['filename']}",
+                                )
+                        except Exception:
+                            pass
 
     # ================================
     # PENDING ACTION CONFIRMATION
@@ -8525,6 +8707,7 @@ def main():
                 "AUTO_EXECUTE": "🤖 Autonomous Agent",
                 "RECOMMEND": "✨ Recommendation Agent",
                     "GENERATE_DOCUMENT": "📝 Document Generator",
+                    "GENERATE_REPORT": "📊 Report Generator",
             }.get(
                 st.session_state.get("last_route"),
                 None,
@@ -8576,24 +8759,37 @@ def main():
                     for source in sources:
                         st.markdown(f"- {source}")
 
-            # GENERATE_DOCUMENT's real .docx file - offered as a
-            # direct download right under the answer. Read from disk
-            # fresh (not cached) since it was just written this turn
-            # by document_generator.generate_document_evidence().
+            # GENERATE_DOCUMENT's real .docx file, or GENERATE_REPORT's
+            # real .docx/.pdf/.xlsx files, offered as direct download(s)
+            # right under the answer. Read from disk fresh (not cached)
+            # since it was just written this turn by document_generator.
+            # generate_document_evidence() or report_generator.
+            # generate_report_evidence(). See the matching history-
+            # redraw block above for why both shapes ({"path",...} vs
+            # {"files": [...]}) are handled here.
             generated_document = st.session_state.get("last_generated_document")
 
             if generated_document:
-                try:
-                    with open(generated_document["path"], "rb") as file_handle:
-                        st.download_button(
-                            label=f"⬇️ Download {generated_document['filename']}",
-                            data=file_handle.read(),
-                            file_name=generated_document["filename"],
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            key=f"download_{generated_document['filename']}",
-                        )
-                except Exception as error:
-                    st.warning(f"Document was generated but couldn't be attached for download: {error}")
+                entries = (
+                    generated_document["files"]
+                    if "files" in generated_document
+                    else [generated_document]
+                )
+                for entry in entries:
+                    try:
+                        with open(entry["path"], "rb") as file_handle:
+                            st.download_button(
+                                label=f"⬇️ Download {entry['filename']}",
+                                data=file_handle.read(),
+                                file_name=entry["filename"],
+                                mime=entry.get(
+                                    "mime",
+                                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                ),
+                                key=f"download_{entry['filename']}",
+                            )
+                    except Exception as error:
+                        st.warning(f"Document was generated but couldn't be attached for download: {error}")
 
             # Captured here (immediately after generation) rather
             # than read again down at the save step below, since

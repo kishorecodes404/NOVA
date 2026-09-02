@@ -42,6 +42,19 @@ FACTS vs WORDING, and why the document genuinely needs the AI:
     should be paraphrasing, and doing so would only add hallucination
     risk for zero benefit.
 
+    EXCEPTION - Leave Letter: this is the one document type with a
+    deterministic, per-leave-type fallback paragraph (see
+    `_LEAVE_TYPE_TEMPLATES` / `_leave_letter_fallback_body()`), added
+    after repeated real-world failures where the letter simply
+    couldn't be produced whenever `llm_writer` was unavailable. It
+    still tries the AI path first when `llm_writer` is given, and
+    that output is still fact-verified before use - but if the AI
+    path doesn't produce usable prose, the Leave Letter now falls
+    back to a fixed, professionally-worded template (parametrized
+    with the same real record data, never invented) instead of
+    failing outright. Every other document type keeps the "fails
+    rather than falls back" behavior described above.
+
 Layout/visual design (title block, metadata table, section headings,
 spacing, signature block - see the "PROFESSIONAL DOCUMENT LAYOUT"
 section below) is a reusable Python template shared by every document
@@ -453,6 +466,82 @@ def _match_leave_type(question):
     return None
 
 
+def _resolve_question_date(question):
+    """
+    Deterministic (non-AI) resolution of a bare "today"/"tomorrow"
+    reference in a document-generation request, e.g. "generate a
+    leave letter for tomorrow". Mirrors the same reasoning as
+    app.py's extract_leave_fields()/_resolve_relative_leave_date():
+    relative-day arithmetic is cheap and unambiguous in plain Python,
+    so it's never left to an LLM (or, here, to a keyword match
+    against whatever record happens to be first in history) to get
+    right.
+
+    Returns a `date` only when exactly one of "today"/"tomorrow"
+    appears as its own token - not "neither" (nothing to resolve) and
+    not "both" (ambiguous) - so a request that doesn't reference a
+    relative day, or references one ambiguously, correctly returns
+    None and the caller falls back to its normal "most recent
+    matching record" behavior instead of guessing.
+    """
+    tokens = re.findall(r"[a-z]+", question.lower())
+    has_tomorrow = "tomorrow" in tokens
+    has_today = "today" in tokens
+    if has_tomorrow == has_today:
+        return None
+    return (date.today() + timedelta(days=1)) if has_tomorrow else date.today()
+
+
+def _match_leave_record(question, history):
+    """
+    Picks which stored leave record a request like "generate a leave
+    letter for tomorrow" or "generate a sick leave letter" actually
+    refers to - history[0] alone isn't enough, since "for tomorrow"
+    needs to find the record actually DATED tomorrow, not just
+    whichever record happens to be most recent (a real, observed
+    failure: asking for "tomorrow"'s letter kept returning an older
+    record with the wrong date instead of the one that matches).
+
+    Two independent signals, both optional:
+    - a leave-type keyword ("sick"/"annual"/"casual"), via
+      _match_leave_type()
+    - a resolved "today"/"tomorrow" reference, via
+      _resolve_question_date()
+
+    A resolved date takes priority when it actually matches some
+    record's start or end date - that's a far more specific signal
+    than recency. It's checked first against the type-filtered list,
+    then (if the type filter was given but matched no record on that
+    date) against the FULL history, since a genuine date match is
+    stronger evidence of intent than a stated type that just doesn't
+    have a record on that day. If no date reference is given, or it
+    doesn't match anything on file, falls back to the original
+    behavior: the most recent record after the type filter - never
+    invents a match that isn't actually there.
+    """
+    leave_type = _match_leave_type(question)
+    type_filtered = history
+    if leave_type:
+        type_filtered = [r for r in history if r.get("leave_type") == leave_type] or history
+
+    target_date = _resolve_question_date(question)
+    if target_date:
+        target_str = target_date.strftime("%Y-%m-%d")
+
+        def _matches_target(r):
+            return r.get("start") == target_str or r.get("end") == target_str
+
+        date_matches = [r for r in type_filtered if _matches_target(r)]
+        if date_matches:
+            return date_matches[0]
+        if leave_type:
+            full_date_matches = [r for r in history if _matches_target(r)]
+            if full_date_matches:
+                return full_date_matches[0]
+
+    return type_filtered[0]
+
+
 def _format_letter_date(value):
     """Render a stored 'YYYY-MM-DD' leave date as 'September 02,
     2026' for the printed letter. Falls back to the raw stored value
@@ -541,6 +630,46 @@ def _strip_boilerplate(text):
     return cleaned.strip()
 
 
+_NUMBER_WORDS = {
+    1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+    7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven",
+    12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen",
+    16: "sixteen", 17: "seventeen", 18: "eighteen", 19: "nineteen",
+    20: "twenty",
+}
+_ZERO_PADDED_DATE_RE = re.compile(r"^([A-Za-z]+) 0(\d), (\d{4})$")
+
+
+def _fact_variants(value):
+    """A required fact still has to be a LITERAL match against the
+    model's output - this only widens HOW it may be spelled, never
+    what it may say. Covers two real formatting choices a model can
+    make that are just as correct as ours but would otherwise fail
+    the check: a date's zero-padded day ("September 03, 2026" also
+    accepts "September 3, 2026"), and a small count written as a
+    digit vs. an English word ("3" also accepts "three", and vice
+    versa). A wrong date or wrong number still fails either way."""
+    text = str(value).strip()
+    variants = {text}
+
+    m = _ZERO_PADDED_DATE_RE.match(text)
+    if m:
+        variants.add(f"{m.group(1)} {m.group(2)}, {m.group(3)}")
+
+    if text.isdigit():
+        word = _NUMBER_WORDS.get(int(text))
+        if word:
+            variants.add(word)
+    else:
+        lowered = text.lower()
+        for n, word in _NUMBER_WORDS.items():
+            if lowered == word:
+                variants.add(str(n))
+                break
+
+    return variants
+
+
 def _ai_generate_document_content(llm_writer, doc_type_label, instruction,
                                    required_facts, max_chars=1600):
     """
@@ -552,10 +681,11 @@ def _ai_generate_document_content(llm_writer, doc_type_label, instruction,
 
     Returns the AI's text - after stripping any duplicate greeting/
     closing boilerplate it added despite instructions not to, see
-    _strip_boilerplate() - only if EVERY required fact's value still
-    literally appears (case-insensitive) somewhere in what remains.
-    Otherwise returns None - callers must treat None as "this
-    document's content could not be produced" (see
+    _strip_boilerplate() - only if EVERY required fact's value (or an
+    equally-correct alternate spelling of it, see _fact_variants())
+    still literally appears (case-insensitive) somewhere in what
+    remains. Otherwise returns None - callers must treat None as
+    "this document's content could not be produced" (see
     DocumentWriterUnavailable), never substitute their own template
     sentence, so the document's wording keeps genuinely depending on
     the model rather than a static fallback.
@@ -609,7 +739,8 @@ Content:"""
 
     lowered = text.lower()
     for _label, value in required_facts:
-        if str(value).strip().lower() not in lowered:
+        variants = _fact_variants(value)
+        if not any(v.lower() in lowered for v in variants):
             return None
 
     return text
@@ -738,17 +869,97 @@ def _build_purchase_order_docx(question, llm_writer=None):
 # LEAVE LETTER
 # =========================================================
 
-def _build_leave_letter_docx(question, llm_writer=None):
-    leave_type = _match_leave_type(question)
-    history = rag.get_leave_history("me", include_cancelled=True)
+# Deterministic, professionally-worded openings per leave type - used
+# as a fallback when the AI writer path doesn't produce usable prose
+# (see _leave_letter_fallback_body() and the module docstring's
+# "EXCEPTION - Leave Letter" note). Keys are matched against the
+# record's raw `leave_type` value, lowercased. Anything not listed
+# here (maternity, paternity, bereavement, unpaid, or any other type
+# the system stores) still gets a complete, formal letter via
+# _DEFAULT_LEAVE_TEMPLATE below - it's just generic rather than
+# type-specific phrasing.
+_LEAVE_TYPE_TEMPLATES = {
+    "sick": (
+        "I am writing to formally request Sick Leave {when_line}, "
+        "covering {days} {day_word}. I am unwell and require this "
+        "time to recover before I am able to resume my duties."
+    ),
+    "casual": (
+        "I am writing to formally request Casual Leave {when_line}, "
+        "covering {days} {day_word}. This is a short leave of absence "
+        "requested for personal reasons."
+    ),
+    "annual": (
+        "I am writing to formally request Annual Leave {when_line}, "
+        "covering {days} {day_word}. This leave has been planned in "
+        "advance as part of my annual leave entitlement, and I will "
+        "ensure my responsibilities are handed over appropriately "
+        "before I am away."
+    ),
+    "vacation": (
+        "I am writing to formally request Vacation Leave {when_line}, "
+        "covering {days} {day_word}. This leave has been planned in "
+        "advance, and I will ensure my responsibilities are handed "
+        "over appropriately before I am away."
+    ),
+    "maternity": (
+        "I am writing to formally request Maternity Leave "
+        "{when_line}, covering {days} {day_word}, in accordance with "
+        "company policy."
+    ),
+    "paternity": (
+        "I am writing to formally request Paternity Leave "
+        "{when_line}, covering {days} {day_word}, in accordance with "
+        "company policy."
+    ),
+    "bereavement": (
+        "I am writing to formally request Bereavement Leave "
+        "{when_line}, covering {days} {day_word}."
+    ),
+    "unpaid": (
+        "I am writing to formally request Unpaid Leave {when_line}, "
+        "covering {days} {day_word}."
+    ),
+}
+_DEFAULT_LEAVE_TEMPLATE = (
+    "I am writing to formally request {leave_type_label} Leave "
+    "{when_line}, covering {days} {day_word}."
+)
 
-    if leave_type:
-        history = [r for r in history if r.get("leave_type") == leave_type] or history
+
+def _leave_letter_fallback_body(leave_type, leave_type_label, when_line,
+                                 days, day_word, status, reason, show_reason):
+    """Deterministic body text for the Leave Letter, used only when
+    the AI writer path (see _build_leave_letter_docx) doesn't return
+    usable prose. Every value substituted in is real data the caller
+    already validated - only the surrounding SENTENCES are fixed, per
+    leave type, so the letter's actual content still depends entirely
+    on the real leave record and never states anything invented."""
+    template = _LEAVE_TYPE_TEMPLATES.get(
+        (leave_type or "").strip().lower(), _DEFAULT_LEAVE_TEMPLATE
+    )
+    opening = template.format(
+        leave_type_label=leave_type_label, when_line=when_line,
+        days=days, day_word=day_word,
+    )
+    if show_reason:
+        opening += f" The reason for this request is {reason}."
+
+    closing = (
+        f"This request is currently {status}. Please let me know if "
+        f"any further information or documentation is required to "
+        f"support this request."
+    )
+    return f"{opening}\n\n{closing}"
+
+
+def _build_leave_letter_docx(question, llm_writer=None):
+    history = rag.get_leave_history("me", include_cancelled=True)
 
     if not history:
         return None, "No leave requests were found for you to generate a letter from.", [], None
 
-    record = history[0]
+    record = _match_leave_record(question, history)
 
     start_fmt = _format_letter_date(record.get("start"))
     end_fmt = _format_letter_date(record.get("end"))
@@ -798,13 +1009,30 @@ def _build_leave_letter_docx(question, llm_writer=None):
         + (f" Naturally work in the reason given: {reason}." if show_reason else "")
     )
 
-    body = _ai_generate_document_content(
-        llm_writer, "Leave Letter", instruction, required_facts
-    )
+    body = None
+    if llm_writer is not None:
+        # Best-effort: if a working AI writer is wired up, it still
+        # produces the nicer, naturally-phrased version - and it's
+        # still fact-verified before being trusted (see
+        # _ai_generate_document_content). But unlike every other
+        # document type, the Leave Letter no longer FAILS when this
+        # comes back empty - see _leave_letter_fallback_body() below
+        # and the module docstring's "EXCEPTION - Leave Letter" note.
+        body = _ai_generate_document_content(
+            llm_writer, "Leave Letter", instruction, required_facts
+        )
+    body_source = "AI-written (fact-verified)"
     if not body:
-        raise DocumentWriterUnavailable(
-            "the AI writer model is currently unavailable, so this "
-            "Leave Letter's content could not be generated"
+        body_source = "template (AI unavailable or unverified)"
+        body = _leave_letter_fallback_body(
+            leave_type=record.get("leave_type", ""),
+            leave_type_label=leave_type_label,
+            when_line=when_line,
+            days=days,
+            day_word=day_word,
+            status=status,
+            reason=reason,
+            show_reason=show_reason,
         )
 
     path, filename = _new_docx_path("leave_letter")
@@ -898,7 +1126,7 @@ def _build_leave_letter_docx(question, llm_writer=None):
         evidence_lines.append(f"DESIGNATION: {USER_DESIGNATION}")
     if USER_ORGANIZATION:
         evidence_lines.append(f"ORGANIZATION: {USER_ORGANIZATION}")
-    evidence_lines.append("LETTER_BODY_SOURCE: AI-written (fact-verified)")
+    evidence_lines.append(f"LETTER_BODY_SOURCE: {body_source}")
     sources = [
         f"Leave request {record.get('id')} - {record.get('leave_type')} "
         f"({record.get('start')} to {record.get('end')})"
