@@ -20,12 +20,17 @@ call.
 
 Wired into app.py's main() - see render_notification_panel() call
 right under the top bar - and is entirely additive: no existing
-route, agent, or store is touched. The two exceptions are the
-Approve/Reject actions on PO and Expense items, which call the
-SAME rag.py functions (approve_po_request/approve_expense_request/
-reject_po_request/reject_expense_request) your email-approval links
-already use - no new state, no new store, just a second UI for an
-existing action, gated behind an explicit confirm step.
+route, agent, or store is touched. The one exception is the
+Approve/Reject action on Expense items, which calls the SAME
+rag.py functions (approve_expense_request/reject_expense_request)
+your email-approval links already use - no new state, no new
+store, just a second UI for an existing action, gated behind an
+explicit confirm step. PO items are notify-only here: in this
+single-tenant app every PO is "requested by me", so the requester
+approving their own PO in this panel would be self-approval - that
+decision belongs to whoever actually signs off on the PO (e.g. the
+vendor/procurement side), not the requester, so no action buttons
+are offered.
 """
 
 import html
@@ -119,7 +124,8 @@ def _age_days(iso_timestamp):
 # returns a flat list of plain dicts with a consistent shape:
 #   agent, icon, title, detail, reason, score, timestamp,
 #   and optionally action_label/action_prompt (navigate-to-chat)
-#   or approve_ref (real approve/reject buttons - PO/Expense only).
+#   or approve_ref (real approve/reject buttons - Expense only; PO
+#   is notify-only, see module docstring).
 # A failure in one agent (e.g. mail not configured, no calendar for
 # this user) is swallowed by gather_notifications() so it can never
 # blank out every other agent's notifications.
@@ -164,13 +170,6 @@ def _collect_po_notifications():
             "reason": reason,
             "score": score,
             "timestamp": req.get("requested_at", ""),
-            "action_label": "Approve PO",
-            "approve_ref": {
-                "kind": "po",
-                "id": req.get("id"),
-                "vendor": vendor,
-                "amount": amount,
-            },
         })
 
     return items
@@ -219,10 +218,10 @@ def _collect_leave_notifications():
             "reason": reason,
             "score": score,
             "timestamp": req.get("requested_at", ""),
-            "action_label": "Review Leave",
+            "action_label": "Delete Request",
             "action_prompt": (
-                f"Show me {user}'s pending {leave_type.lower()} leave request "
-                f"from {req.get('start')} to {req.get('end')} and help me decide on approving it."
+                f"Cancel/delete my pending {leave_type.lower()} leave request "
+                f"from {req.get('start')} to {req.get('end')}."
             ),
         })
 
