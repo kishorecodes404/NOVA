@@ -146,6 +146,21 @@ import document_generator
 import report_generator
 
 # ---------------------------------------------------
+# Notification & Alert Intelligence Agent
+#
+# Reads every existing agent's own store (PO/Leave/Expense/
+# Meetings/Mail) on page load, scores each pending/urgent item
+# deterministically (deadline proximity + type weight + time
+# pending - no LLM judgment), and renders the top results as a
+# prioritized notification panel. Purely additive: no existing
+# route, agent, or store is touched. See notification_agent.py's
+# module docstring for the full collect -> score -> render flow,
+# and for why it has no Task section (no Task agent/store exists
+# in rag.py yet, same gap report_generator.py already notes).
+# ---------------------------------------------------
+import notification_agent
+
+# ---------------------------------------------------
 # Timing log
 #
 # Writes straight to a file next to app.py, so it's findable
@@ -8080,6 +8095,16 @@ def main():
         """,
         unsafe_allow_html=True,
     )
+
+    # ================================
+    # NOTIFICATIONS
+    # ================================
+    # Collected fresh from PO/Leave/Expense/Meetings/Mail on every
+    # page load (see notification_agent.py) - shown right under the
+    # top bar so it's the first thing the user sees when NOVA opens,
+    # before the empty state / chat history below.
+
+    notification_agent.render_notification_panel()
 
     # ================================
     # EMPTY STATE
