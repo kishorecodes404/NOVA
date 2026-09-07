@@ -1096,6 +1096,47 @@ def get_groq_api_key():
         return os.getenv("GROQ_API_KEY") or os.getenv("GROK_API_KEY")
 
 
+GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+GROQ_WHISPER_MODEL = "whisper-large-v3-turbo"
+
+
+def transcribe_audio_groq(audio_bytes, groq_api_key, mime_type="audio/wav"):
+    """
+    Sends recorded mic audio (raw bytes from st.audio_input) to
+    Groq's hosted Whisper endpoint and returns the transcript text.
+
+    Reuses GROQ_SESSION/groq_api_key rather than adding a new
+    provider - Groq is already configured for the chat model, is
+    fast enough for a "record then review" flow, and needs no new
+    credentials. Returns (text, error) - exactly one is non-None,
+    so callers don't need a try/except of their own.
+    """
+    if not groq_api_key:
+        return None, (
+            "No Groq API key found, so voice input can't be "
+            "transcribed. Set GROQ_API_KEY in your .env file."
+        )
+
+    try:
+        response = GROQ_SESSION.post(
+            GROQ_TRANSCRIPTION_URL,
+            headers={"Authorization": f"Bearer {groq_api_key}"},
+            data={"model": GROQ_WHISPER_MODEL},
+            files={"file": ("voice_input.wav", audio_bytes, mime_type)},
+            timeout=30,
+        )
+        response.raise_for_status()
+        text = response.json().get("text", "").strip()
+
+        if not text:
+            return None, "Didn't catch any speech in that recording - try again?"
+
+        return text, None
+
+    except requests.exceptions.RequestException as error:
+        return None, f"Voice transcription failed: {error}"
+
+
 CHAT_DB = "chat_history.db"
 
 
@@ -4326,6 +4367,32 @@ def _cancel_pending_action():
         {"role": "model", "content": cancel_text}
     )
     save_message(st.session_state.current_chat_id, "model", cancel_text)
+
+
+def _send_voice_prompt():
+    """
+    Button callback: takes whatever's currently in the voice review
+    text area (the user may have edited it) and hands it to the
+    normal message pipeline via pending_prompt - the exact same
+    injection point the follow-up-question buttons use, so a voice
+    message goes through routing/action-agents identically to a
+    typed one.
+    """
+    edited_text = st.session_state.get("edit_voice_transcript", "").strip()
+
+    st.session_state.voice_review = None
+
+    if edited_text:
+        st.session_state.pending_prompt = edited_text
+
+
+def _discard_voice_prompt():
+    """
+    Button callback: discards a transcribed voice message without
+    sending anything.
+    """
+    st.session_state.voice_review = None
+    st.session_state.pop("edit_voice_transcript", None)
 
 
 _WEEKDAY_NAMES = (
@@ -8064,6 +8131,19 @@ def main():
     if "pending_action" not in st.session_state:
         st.session_state.pending_action = None
 
+    # Voice input: `voice_review` holds a transcript waiting for the
+    # user to edit/confirm before it becomes a real prompt (same
+    # "review before it does anything" shape as pending_action above,
+    # just for a transcript instead of a mail/PO/leave draft).
+    # `processed_audio_hash` stops the same recording from being
+    # re-transcribed on every rerun, since st.audio_input keeps
+    # returning the last clip until the user records again.
+    if "voice_review" not in st.session_state:
+        st.session_state.voice_review = None
+
+    if "processed_audio_hash" not in st.session_state:
+        st.session_state.processed_audio_hash = None
+
     api_key = get_api_key()
     groq_api_key = get_groq_api_key()
     selected_model = render_sidebar(api_key)
@@ -8467,6 +8547,51 @@ def main():
         return
 
     # ================================
+    # VOICE INPUT REVIEW
+    #
+    # A transcript is waiting for the user to check/edit before it
+    # becomes a real prompt - same "review before it does anything"
+    # shape as PENDING ACTION CONFIRMATION above, just for a
+    # transcript instead of a mail/PO/leave draft. While this is
+    # showing, the normal chat input/recorder below is hidden so a
+    # fresh recording or typed message can't race with it.
+    # ================================
+
+    if st.session_state.get("voice_review"):
+
+        st.markdown("**Review the transcript, then send or discard:**")
+
+        st.text_area(
+            "Transcribed message",
+            value=st.session_state.voice_review["text"],
+            key="edit_voice_transcript",
+            height=100,
+            label_visibility="collapsed",
+        )
+
+        voice_col1, voice_col2 = st.columns(2)
+
+        with voice_col1:
+            st.button(
+                "✅ Send",
+                key="send_voice_prompt",
+                use_container_width=True,
+                on_click=_send_voice_prompt,
+            )
+
+        with voice_col2:
+            st.button(
+                "✖️ Discard",
+                key="discard_voice_prompt",
+                use_container_width=True,
+                on_click=_discard_voice_prompt,
+            )
+
+        st.caption("Fix anything the transcription got wrong, then Send - or Discard to drop it.")
+
+        return
+
+    # ================================
     # CHAT INPUT
     # ================================
 
@@ -8474,6 +8599,42 @@ def main():
         "pending_prompt",
         None,
     )
+
+    # Voice recorder sits just above the text box. st.audio_input
+    # keeps returning the same clip on every rerun until the user
+    # records again, so we hash the bytes and only transcribe once
+    # per new recording (processed_audio_hash below) - otherwise
+    # we'd re-transcribe (and re-open the review card) on every
+    # unrelated rerun this page does.
+    with st.expander("🎤 Voice input", expanded=False):
+
+        recorded_audio = st.audio_input(
+            "Record a message",
+            key="voice_recorder",
+            label_visibility="collapsed",
+        )
+
+        if recorded_audio is not None:
+
+            audio_bytes = recorded_audio.getvalue()
+            audio_hash = hash(audio_bytes)
+
+            if audio_hash != st.session_state.processed_audio_hash:
+
+                st.session_state.processed_audio_hash = audio_hash
+
+                with st.spinner("Transcribing..."):
+                    transcript, transcription_error = transcribe_audio_groq(
+                        audio_bytes,
+                        groq_api_key,
+                        mime_type=getattr(recorded_audio, "type", "audio/wav") or "audio/wav",
+                    )
+
+                if transcription_error:
+                    st.warning(transcription_error)
+                else:
+                    st.session_state.voice_review = {"text": transcript}
+                    st.rerun()
 
     chat_prompt = st.chat_input(
         f"Message {APP_NAME}..."
