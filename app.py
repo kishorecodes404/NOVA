@@ -8134,15 +8134,13 @@ def main():
     # Voice input: `voice_review` holds a transcript waiting for the
     # user to edit/confirm before it becomes a real prompt (same
     # "review before it does anything" shape as pending_action above,
-    # just for a transcript instead of a mail/PO/leave draft).
-    # `processed_audio_hash` stops the same recording from being
-    # re-transcribed on every rerun, since st.audio_input keeps
-    # returning the last clip until the user records again.
+    # just for a transcript instead of a mail/PO/leave draft). The
+    # mic itself is native to st.chat_input (accept_audio=True) below,
+    # so - unlike an separate recorder widget - there's no rerun-
+    # replay to guard against: a submitted recording is a one-shot
+    # value, not something that keeps reappearing on every rerun.
     if "voice_review" not in st.session_state:
         st.session_state.voice_review = None
-
-    if "processed_audio_hash" not in st.session_state:
-        st.session_state.processed_audio_hash = None
 
     api_key = get_api_key()
     groq_api_key = get_groq_api_key()
@@ -8600,45 +8598,48 @@ def main():
         None,
     )
 
-    # Voice recorder sits just above the text box. st.audio_input
-    # keeps returning the same clip on every rerun until the user
-    # records again, so we hash the bytes and only transcribe once
-    # per new recording (processed_audio_hash below) - otherwise
-    # we'd re-transcribe (and re-open the review card) on every
-    # unrelated rerun this page does.
-    with st.expander("🎤 Voice input", expanded=False):
-
-        recorded_audio = st.audio_input(
-            "Record a message",
-            key="voice_recorder",
-            label_visibility="collapsed",
-        )
-
-        if recorded_audio is not None:
-
-            audio_bytes = recorded_audio.getvalue()
-            audio_hash = hash(audio_bytes)
-
-            if audio_hash != st.session_state.processed_audio_hash:
-
-                st.session_state.processed_audio_hash = audio_hash
-
-                with st.spinner("Transcribing..."):
-                    transcript, transcription_error = transcribe_audio_groq(
-                        audio_bytes,
-                        groq_api_key,
-                        mime_type=getattr(recorded_audio, "type", "audio/wav") or "audio/wav",
-                    )
-
-                if transcription_error:
-                    st.warning(transcription_error)
-                else:
-                    st.session_state.voice_review = {"text": transcript}
-                    st.rerun()
-
-    chat_prompt = st.chat_input(
-        f"Message {APP_NAME}..."
+    # accept_audio=True gives st.chat_input its own native mic icon
+    # inside the bar - recording is attached like a file, and only
+    # comes back to us (as chat_submission.audio) once the user hits
+    # Send, so there's nothing to poll/dedupe like a standalone
+    # recorder widget would need. A voice submission still goes
+    # through the same review-before-send card as before: we
+    # transcribe it here, drop it into voice_review, and rerun -
+    # the routing pipeline only ever sees the text the user confirmed.
+    chat_submission = st.chat_input(
+        f"Message {APP_NAME}...",
+        accept_audio=True,
+        audio_sample_rate=16000,
     )
+
+    chat_prompt = None
+
+    if chat_submission is not None:
+
+        if chat_submission.audio is not None:
+
+            with st.spinner("Transcribing..."):
+                transcript, transcription_error = transcribe_audio_groq(
+                    chat_submission.audio.getvalue(),
+                    groq_api_key,
+                    mime_type=getattr(chat_submission.audio, "type", "audio/wav") or "audio/wav",
+                )
+
+            if transcription_error:
+                st.warning(transcription_error)
+            else:
+                # Typed text and a voice note can both be attached to
+                # one submission - keep both rather than dropping
+                # whichever one the user also typed alongside it.
+                combined_text = transcript
+                if chat_submission.text:
+                    combined_text = f"{chat_submission.text}\n\n{transcript}"
+
+                st.session_state.voice_review = {"text": combined_text}
+                st.rerun()
+
+        else:
+            chat_prompt = chat_submission.text
 
     prompt = pending_prompt or chat_prompt
 
