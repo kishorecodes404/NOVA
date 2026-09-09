@@ -2,8 +2,7 @@
 Notification & Alert Intelligence Agent
 
 Collects the latest state from every existing agent's own store
-(PO/Leave/Expense/Meetings/Mail - Task has no store yet, see
-_collect_task_notifications() below) and turns it into a single,
+(PO/Leave/Expense/Meetings/Mail/Task) and turns it into a single,
 prioritized notification feed for when the user opens NOVA.
 
 Every fact shown here is read straight from rag.py's stores, never
@@ -46,6 +45,7 @@ from rag import (
     get_pending_expense_requests,
     get_pending_leave_requests,
     get_pending_po_requests,
+    get_pending_tasks,
     reject_expense_request,
     reject_po_request,
     search_mail,
@@ -335,16 +335,62 @@ def _collect_mail_notifications(max_results=5):
     return items
 
 
-def _collect_task_notifications():
+def _collect_task_notifications(user=None):
     """
-    No Task agent/store exists in rag.py yet (same gap noted in
-    report_generator.py's module docstring). Rather than surfacing a
-    "not connected" placeholder card on every page load - noise the
-    user can never act on or dismiss - this simply contributes
-    nothing to the panel until a real Task store exists.
+    Pending (not completed/cancelled) tasks from rag.py's Task
+    store, scored the same way _collect_leave_notifications() scores
+    an approaching deadline: undated tasks are low-urgency background
+    noise, and urgency ramps up as the due date approaches or slips
+    into the past, capping at URGENCY_OVERDUE so an overdue task
+    always sorts above a same-day one.
     """
 
-    return []
+    items = []
+
+    for task in get_pending_tasks(user=user):
+
+        due_in = _days_until(task.get("due_date"))
+        title = task.get("title", "Untitled task")
+        priority = str(task.get("priority", "medium")).title()
+
+        if due_in is None:
+            score = URGENCY_LOW
+            reason = f"No due date set ({priority} priority)."
+        elif due_in < 0:
+            score = URGENCY_OVERDUE
+            reason = f"Overdue by {abs(due_in)} day(s) ({priority} priority)."
+        elif due_in == 0:
+            score = URGENCY_CRITICAL
+            reason = f"Due today ({priority} priority)."
+        elif due_in == 1:
+            score = URGENCY_HIGH
+            reason = f"Due tomorrow ({priority} priority)."
+        elif due_in <= 3:
+            score = URGENCY_HIGH
+            reason = f"Due in {due_in} days ({priority} priority)."
+        elif due_in <= 7:
+            score = URGENCY_MEDIUM
+            reason = f"Due in {due_in} days ({priority} priority)."
+        else:
+            score = URGENCY_LOW
+            reason = f"Due {task.get('due_date')} ({priority} priority)."
+
+        items.append({
+            "agent": "Task",
+            "icon": "✅",
+            "title": f"Task pending — {title}",
+            "detail": (
+                f"{priority} priority"
+                + (f" · due {task.get('due_date')}" if task.get("due_date") else " · no due date")
+            ),
+            "reason": reason,
+            "score": score,
+            "timestamp": task.get("created_at", ""),
+            "action_label": "View Task",
+            "action_prompt": f"Show me details for the task: {title}",
+        })
+
+    return items
 
 
 # ============================================================
@@ -418,7 +464,7 @@ def gather_notifications(user=None, limit=8):
         _collect_expense_notifications,
         lambda: _collect_meeting_notifications(user=user),
         _collect_mail_notifications,
-        _collect_task_notifications,
+        lambda: _collect_task_notifications(user=user),
     )
 
     all_items = []

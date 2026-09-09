@@ -2821,6 +2821,289 @@ def reject_leave_request(request_id, approver_note=""):
 
 
 # ============================================================
+# TASK AGENT
+#
+# The gap named in report_generator.py's and notification_agent.py's
+# module docstrings: a real to-do/task store, following the exact
+# same JSON-file convention as the Leave/PO/Expense agents above
+# (see LEAVE AGENT's header comment) so it can be swapped for a real
+# task backend (Jira, Asana, ...) later without touching callers -
+# create_task()/get_task_history()/complete_task()/delete_task()
+# just need to keep their signatures.
+#
+#     NOVA_TASK_STORE_PATH     path to a JSON file (default
+#                               "task_store.json")
+# ============================================================
+
+TASK_STORE_PATH = os.environ.get("NOVA_TASK_STORE_PATH", "task_store.json")
+
+TASK_PRIORITIES = ("low", "medium", "high")
+
+
+def _load_task_store():
+    """Loads the JSON task store, or an empty-but-valid shape."""
+
+    if not os.path.exists(TASK_STORE_PATH):
+        return {"tasks": [], "next_id": 1}
+
+    try:
+        with open(TASK_STORE_PATH, "r", encoding="utf-8") as store_file:
+            data = json.load(store_file)
+    except Exception as error:
+        print(f"[TASK] Couldn't read store at {TASK_STORE_PATH}: {error}", flush=True)
+        return {"tasks": [], "next_id": 1}
+
+    data.setdefault("tasks", [])
+    data.setdefault("next_id", len(data["tasks"]) + 1)
+    return data
+
+
+def _save_task_store(store):
+    """Writes the task store back to disk. Returns True on success."""
+
+    try:
+        with open(TASK_STORE_PATH, "w", encoding="utf-8") as store_file:
+            json.dump(store, store_file, indent=2, default=str)
+        return True
+    except Exception as error:
+        print(f"[TASK] Couldn't write store at {TASK_STORE_PATH}: {error}", flush=True)
+        return False
+
+
+def _task_user_key(user):
+    """Same normalization convention as _leave_user_key()."""
+
+    if not user:
+        return "me"
+
+    try:
+        resolved = resolve_calendar_user(user)
+        if resolved:
+            return resolved
+    except Exception:
+        pass
+
+    return str(user).strip().lower() or "me"
+
+
+def _find_task(store, task_id):
+    for task in store.get("tasks", []):
+        if task.get("id") == task_id:
+            return task
+    return None
+
+
+def validate_task_request(title, due_date=None, priority="medium"):
+    """
+    Pre-creation validation, mirroring validate_leave_request()'s
+    shape (ok/errors/warnings/info) so a caller can preview a task
+    before committing it.
+
+    Args:
+        title: required, short free-text task name.
+        due_date: optional date/datetime (or None for no due date).
+        priority: one of TASK_PRIORITIES; anything else falls back
+            to "medium" with a warning rather than a hard error.
+    """
+
+    errors = []
+    warnings = []
+    info = {}
+
+    title = str(title or "").strip()
+    if not title:
+        errors.append("A task needs a title.")
+
+    if isinstance(due_date, datetime):
+        due_date = due_date.date()
+
+    if due_date is not None:
+        today = datetime.now().date()
+        if due_date < today:
+            warnings.append(
+                f"Due date {due_date} is in the past - the task will be "
+                f"created as already overdue."
+            )
+        info["due_date"] = due_date.isoformat()
+
+    priority = str(priority or "medium").strip().lower()
+    if priority not in TASK_PRIORITIES:
+        warnings.append(f"Unknown priority '{priority}' - defaulting to 'medium'.")
+        priority = "medium"
+
+    info["priority"] = priority
+    info["title"] = title
+
+    return not errors, errors, warnings, info
+
+
+def create_task(title, description="", due_date=None, priority="medium", user=None, linked_to=None):
+    """
+    Creates and persists a new task. Same two-step shape as
+    apply_leave()/apply_po(): callers that want a preview first
+    should call validate_task_request() themselves.
+
+    Args:
+        title: required task name.
+        description: optional free-text detail.
+        due_date: optional date/datetime.
+        priority: one of TASK_PRIORITIES.
+        user: owner/assignee (defaults to "me", same single-tenant
+            convention as apply_leave()).
+        linked_to: optional free-text reference to another record
+            (e.g. "PO-0004", "leave request for Aug 12-14") - purely
+            descriptive, not a foreign key into another store.
+
+    Returns:
+        (success: bool, message: str, details: dict|None)
+    """
+
+    ok, errors, warnings, info = validate_task_request(title, due_date, priority)
+
+    if not ok:
+        return False, "; ".join(errors), None
+
+    if isinstance(due_date, datetime):
+        due_date = due_date.date()
+
+    store = _load_task_store()
+    task_id = store.get("next_id", 1)
+    user_key = _task_user_key(user)
+
+    task = {
+        "id": task_id,
+        "title": info["title"],
+        "description": str(description or "").strip(),
+        "due_date": due_date.isoformat() if due_date else None,
+        "priority": info["priority"],
+        "status": "pending",
+        "user": user_key,
+        "linked_to": str(linked_to).strip() if linked_to else None,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "completed_at": None,
+    }
+
+    store["tasks"].append(task)
+    store["next_id"] = task_id + 1
+
+    if not _save_task_store(store):
+        return False, "Couldn't save the task - please try again.", None
+
+    print(f"[TASK] {user_key}: created task #{task_id} \"{task['title']}\"", flush=True)
+
+    message = f"Created task #{task_id}: \"{task['title']}\""
+    if due_date:
+        message += f" (due {due_date.isoformat()})"
+    message += "."
+
+    if warnings:
+        message += " Note: " + "; ".join(warnings)
+
+    return True, message, task
+
+
+def get_task_history(user=None, include_completed=True, include_cancelled=False):
+    """
+    All tasks for `user` (or every user if user is None), most
+    urgent first: sorted by due_date, with no-due-date tasks sorted
+    after dated ones.
+    """
+
+    store = _load_task_store()
+    user_key = _task_user_key(user) if user is not None else None
+
+    tasks = [
+        task
+        for task in store.get("tasks", [])
+        if (user_key is None or task.get("user") == user_key)
+        and (include_completed or task.get("status") != "completed")
+        and (include_cancelled or task.get("status") != "cancelled")
+    ]
+
+    tasks.sort(key=lambda t: (t.get("due_date") is None, t.get("due_date") or ""))
+    return tasks
+
+
+def get_all_tasks():
+    """Every task across every user, regardless of status."""
+
+    return get_task_history(user=None, include_completed=True, include_cancelled=True)
+
+
+def get_pending_tasks(user=None):
+    """Only tasks still open (not completed/cancelled)."""
+
+    return [
+        task
+        for task in get_task_history(user=user, include_completed=False, include_cancelled=False)
+        if task.get("status") == "pending"
+    ]
+
+
+def complete_task(task_id):
+    """Marks a task completed. Returns (success: bool, message: str)."""
+
+    store = _load_task_store()
+    task = _find_task(store, task_id)
+
+    if task is None:
+        return False, f"No task with id {task_id} exists."
+
+    if task.get("status") == "completed":
+        return False, f"Task #{task_id} is already completed."
+
+    task["status"] = "completed"
+    task["completed_at"] = datetime.now().isoformat(timespec="seconds")
+
+    if not _save_task_store(store):
+        return False, "Couldn't save that update - please try again."
+
+    return True, f"Marked task #{task_id} (\"{task['title']}\") as completed."
+
+
+def cancel_task(task_id):
+    """Marks a task cancelled (kept for history, not deleted)."""
+
+    store = _load_task_store()
+    task = _find_task(store, task_id)
+
+    if task is None:
+        return False, f"No task with id {task_id} exists."
+
+    task["status"] = "cancelled"
+
+    if not _save_task_store(store):
+        return False, "Couldn't save that update - please try again."
+
+    return True, f"Cancelled task #{task_id} (\"{task['title']}\")."
+
+
+def delete_task(task_id):
+    """Permanently removes a task from the store."""
+
+    store = _load_task_store()
+    task = _find_task(store, task_id)
+
+    if task is None:
+        return False, f"No task with id {task_id} exists."
+
+    store["tasks"] = [t for t in store["tasks"] if t.get("id") != task_id]
+
+    if not _save_task_store(store):
+        return False, "Couldn't save that update - please try again."
+
+    return True, f"Deleted task #{task_id} (\"{task['title']}\")."
+
+
+def clear_tasks():
+    """Clears all stored tasks. Mirrors clear_leave_requests()."""
+
+    store = _load_task_store()
+    store["tasks"] = []
+    return _save_task_store(store)
+
+
+# ============================================================
 # PO AGENT
 #
 # Raises a Purchase Order with a full set of pre-submission
