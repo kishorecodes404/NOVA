@@ -6,9 +6,9 @@ Implements the "AI Document Generation with PDF/Excel/DOC support"
 flow requested for NOVA:
 
     User Request -> Collect Data from Existing Agents (PO, Meetings/
-    Calendar, Leave, Expense - and Task, once a Task agent exists) ->
-    Validate Data -> Apply Template -> Generate PDF/Excel/DOCX ->
-    User Review -> Final Document.
+    Calendar, Leave, Expense, Task) -> Validate Data -> Apply
+    Template -> Generate PDF/Excel/DOCX -> User Review -> Final
+    Document.
 
 Example: "Generate a weekly project status report using my pending
 tasks, POs, meetings, and important activities."
@@ -46,14 +46,10 @@ FACTS vs WORDING (same split as document_generator.py):
     Python-built either way.
 
 TASK AGENT:
-    NOVA does not currently have a Task agent/store (no to-do-item
-    data source exists in rag.py - only PO, Leave, Expense, Meetings,
-    and Mail). Rather than letting an AI invent plausible-looking
-    "pending tasks" for a business report - which would be a genuine
-    fabrication risk - the report's Tasks section says so plainly and
-    is left empty of invented data. Wiring in a real Task agent later
-    only requires adding one more `_gather_*_section()` function below
-    and passing its result into the three builders' Tasks section.
+    Tasks are pulled straight from rag.py's Task store (see
+    _gather_task_section() below), the same real-data-only rule as
+    every other section: an LLM never invents a task, only the ones
+    actually recorded via create_task() appear here.
 
 Layout/visual design for the .docx output reuses document_generator's
 shared professional layout helpers (title, metadata table, section
@@ -231,16 +227,23 @@ def _gather_expense_section(user):
     }
 
 
-def _gather_task_section():
+def _gather_task_section(user):
     """
-    No Task agent/store currently exists in NOVA - see the module
-    docstring's "TASK AGENT" note. Returns a clearly-marked
-    "unavailable" section rather than any invented task data, so
-    every caller (docx/pdf/xlsx builders and the confirmation
-    message) can render an honest "not available" note instead of
-    silently omitting the section or fabricating content.
+    Real tasks from rag.py's Task store - see the module docstring's
+    "TASK AGENT" note. `available` stays True whenever the store
+    itself is reachable (even with zero tasks), matching the other
+    sections' count_total==0 "none found" handling in
+    _validate_sections() rather than a separate "unavailable" path.
     """
-    return {"available": False, "items": [], "count": 0}
+    history = rag.get_task_history(user, include_completed=True, include_cancelled=False)
+    pending = [t for t in history if t.get("status") == "pending"]
+    return {
+        "available": True,
+        "pending": pending,
+        "recent": history[:10],
+        "count_pending": len(pending),
+        "count_total": len(history),
+    }
 
 
 # =========================================================
@@ -268,15 +271,12 @@ def _validate_sections(po, meetings, leave, expense, tasks):
         warnings.append("no leave records were found")
     if expense["count_total"] == 0:
         warnings.append("no expense records were found")
-    if not tasks["available"]:
-        warnings.append(
-            "no Task agent is currently configured in NOVA, so the "
-            "Tasks section could not be populated from real data"
-        )
+    if tasks["count_total"] == 0:
+        warnings.append("no task records were found")
 
     has_any_data = any([
         po["count_total"], meetings["count"],
-        leave["count_total"], expense["count_total"],
+        leave["count_total"], expense["count_total"], tasks["count_total"],
     ])
 
     return has_any_data, warnings
@@ -421,10 +421,21 @@ def _build_report_docx(window_label, start, end, summary, po, meetings, leave, e
         doc.add_paragraph("No pending expense claims in this period.")
 
     _add_section_heading(doc, "Tasks")
-    doc.add_paragraph(
-        "No Task agent is currently configured in NOVA, so this "
-        "section could not be populated from real task data."
-    )
+    if tasks["pending"]:
+        table = doc.add_table(rows=1, cols=4)
+        table.style = "Light Grid Accent 1"
+        hdr = table.rows[0].cells
+        hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = (
+            "Title", "Priority", "Due Date", "Status"
+        )
+        for record in tasks["pending"]:
+            row = table.add_row().cells
+            row[0].text = str(record.get("title", ""))
+            row[1].text = str(record.get("priority", "")).title()
+            row[2].text = str(record.get("due_date") or "-")
+            row[3].text = str(record.get("status", ""))
+    else:
+        doc.add_paragraph("No pending tasks in this period.")
 
     _add_signature_block(doc, USER_DISPLAY_NAME, closing="Prepared by,")
 
@@ -547,11 +558,19 @@ def _build_report_pdf(window_label, start, end, summary, po, meetings, leave, ex
         elements.append(Paragraph("No pending expense claims in this period.", normal_style))
 
     elements.append(Paragraph("TASKS", heading_style))
-    elements.append(Paragraph(
-        "No Task agent is currently configured in NOVA, so this "
-        "section could not be populated from real task data.",
-        normal_style,
-    ))
+    if tasks["pending"]:
+        rows = [
+            [
+                str(r.get("title", "")),
+                str(r.get("priority", "")).title(),
+                str(r.get("due_date") or "-"),
+                str(r.get("status", "")),
+            ]
+            for r in tasks["pending"]
+        ]
+        elements.append(_table(["Title", "Priority", "Due Date", "Status"], rows))
+    else:
+        elements.append(Paragraph("No pending tasks in this period.", normal_style))
 
     doc = SimpleDocTemplate(
         path, pagesize=A4,
@@ -643,7 +662,7 @@ def _build_report_xlsx(window_label, start, end, summary, po, meetings, leave, e
         ("Calendar Events", meetings["count"]),
         ("Pending Leave Requests", leave["count_pending"]),
         ("Pending Expense Claims", expense["count_pending"]),
-        ("Tasks (no Task agent configured)", "N/A"),
+        ("Pending Tasks", tasks["count_pending"]),
     ]
     for offset, (label, value) in enumerate(counts, start=1):
         ws.cell(row=10 + offset, column=1, value=label)
@@ -711,13 +730,22 @@ def _build_report_xlsx(window_label, start, end, summary, po, meetings, leave, e
         "No pending expense claims in this period.",
     )
 
-    # ---- Tasks sheet (explicitly marked unavailable, no invented data) ----
+    # ---- Tasks sheet ----
     ws_tasks = wb.create_sheet("Tasks")
-    ws_tasks["A1"] = (
-        "No Task agent is currently configured in NOVA, so this "
-        "sheet could not be populated from real task data."
+    _write_table(
+        ws_tasks, 1,
+        ["Title", "Priority", "Due Date", "Status"],
+        [
+            [
+                r.get("title", ""),
+                str(r.get("priority", "")).title(),
+                r.get("due_date") or "-",
+                r.get("status", ""),
+            ]
+            for r in tasks["pending"]
+        ],
+        "No pending tasks in this period.",
     )
-    ws_tasks.column_dimensions["A"].width = 80
 
     wb.save(path)
     return path, filename
@@ -743,7 +771,7 @@ def generate_report_evidence(question, conversation_history="", llm_writer=None,
         meetings = _gather_meetings_section(user, start, end)
         leave = _gather_leave_section(user)
         expense = _gather_expense_section(user)
-        tasks = _gather_task_section()
+        tasks = _gather_task_section(user)
     except Exception as error:
         message = f"Report generation failed while collecting data: {error}"
         return message, [], None, message
