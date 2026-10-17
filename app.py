@@ -8324,58 +8324,44 @@ def render_dashboard_view():
 def render_notification_popover():
     """
     Small bell button pinned to the top-right corner. Clicking it opens
-    the same notification panel as before (render_notification_panel),
-    inside a popover. "Show all" re-renders it with every notification.
+    the notification panel (same size as before) inside a popover.
+    "Show all" re-renders it with every notification instead of the
+    default top 8.
     """
-    import inspect
-
-    render_fn = notification_agent.render_notification_panel
-
-    try:
-        params = inspect.signature(render_fn).parameters
-    except (TypeError, ValueError):
-        params = {}
-
-    show_all_param = "show_all" if "show_all" in params else None
-    limit_param = next(
-        (
-            name
-            for name in (
-                "limit", "max_items", "top_n", "max_notifications",
-                "max_results", "n", "count",
-            )
-            if name in params
-        ),
-        None,
-    )
-    can_show_all = bool(show_all_param or limit_param)
-
     if "notif_show_all" not in st.session_state:
         st.session_state.notif_show_all = False
+
+    show_all = st.session_state.notif_show_all
+    default_limit = 8
+
+    # Same collect/score pass the panel does - used only to decide
+    # whether to offer "Show all" and to show an empty message.
+    total = len(notification_agent.gather_notifications(limit=10_000))
 
     with st.container(key="notif_corner"):
         with st.popover("🔔", help="Notifications"):
 
-            kwargs = {}
-            if st.session_state.notif_show_all:
-                if show_all_param:
-                    kwargs[show_all_param] = True
-                elif limit_param:
-                    kwargs[limit_param] = 10_000
-
-            render_fn(**kwargs)
-
-            if can_show_all:
-                label = (
-                    "Show less"
-                    if st.session_state.notif_show_all
-                    else "Show all"
+            if total == 0:
+                st.caption("No notifications right now.")
+            else:
+                notification_agent.render_notification_panel(
+                    limit=10_000 if show_all else default_limit,
+                    expanded=True,
                 )
-                if st.button(label, key="notif_show_all_btn", use_container_width=True):
-                    st.session_state.notif_show_all = (
-                        not st.session_state.notif_show_all
+
+                if total > default_limit:
+                    label = (
+                        "Show less"
+                        if show_all
+                        else f"Show all ({total})"
                     )
-                    st.rerun()
+                    if st.button(
+                        label,
+                        key="notif_show_all_btn",
+                        use_container_width=True,
+                    ):
+                        st.session_state.notif_show_all = not show_all
+                        st.rerun()
 
 
 def main():
