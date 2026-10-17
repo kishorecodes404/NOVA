@@ -550,7 +550,7 @@ def _render_approve_reject(ref, compact=False):
 # RENDER
 # ============================================================
 
-def render_notification_panel(user=None, limit=8):
+def render_notification_panel(user=None, limit=8, expanded=None):
     """
     Renders the prioritized notification feed. Cheap to call every
     run (it's just a handful of local JSON/ICS reads plus one IMAP
@@ -578,7 +578,10 @@ def render_notification_panel(user=None, limit=8):
     if high_count:
         badge += f" · {high_count} important"
 
-    with st.expander(f"{badge} — Notifications", expanded=bool(high_count)):
+    with st.expander(
+        f"{badge} — Notifications",
+        expanded=bool(high_count) if expanded is None else expanded,
+    ):
 
         st.caption("✨ AI Prioritized · Smart Alerts")
 

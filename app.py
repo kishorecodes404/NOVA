@@ -1195,6 +1195,59 @@ def apply_custom_styles():
             font-weight: 700 !important;
         }
 
+
+        /* ==========================================================
+           NOTIFICATION BELL  (top-right, small)
+        ========================================================== */
+
+        .st-key-notif_corner {
+            position: fixed !important;
+            top: 3.6rem;
+            right: 1.6rem;
+            width: auto !important;
+            z-index: 999990;
+        }
+
+        .st-key-notif_corner [data-testid="stPopover"] { width: auto !important; }
+
+        .st-key-notif_corner [data-testid="stPopover"] > div > button,
+        .st-key-notif_corner button[data-testid="stPopoverButton"] {
+            width: 40px !important;
+            height: 40px !important;
+            min-height: 40px !important;
+            padding: 0 !important;
+            border-radius: 50% !important;
+            font-size: 1.05rem !important;
+            justify-content: center !important;
+            background: var(--glass-bg) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            -webkit-backdrop-filter: var(--glass-blur) !important;
+            border: 1px solid var(--glass-border) !important;
+            box-shadow: var(--raised-sm) !important;
+        }
+
+        .st-key-notif_corner [data-testid="stPopover"] button:active {
+            box-shadow: var(--inset-sm) !important;
+        }
+
+        /* hide the dropdown chevron so it stays a compact round button */
+        .st-key-notif_corner [data-testid="stPopover"] button [data-testid="stIconMaterial"],
+        .st-key-notif_corner [data-testid="stPopover"] button svg { display: none !important; }
+
+        /* popover body = the full panel, at its normal width */
+        div[data-testid="stPopoverBody"] {
+            width: min(1000px, 92vw) !important;
+            max-width: 92vw !important;
+            max-height: 75vh !important;
+            overflow-y: auto !important;
+            background: var(--glass-bg-strong) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            -webkit-backdrop-filter: var(--glass-blur) !important;
+            border: 1px solid var(--glass-border) !important;
+            border-radius: 22px !important;
+            box-shadow: var(--glass-shadow) !important;
+        }
+
         /* ---------- Scrollbars ---------- */
 
         ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -8268,6 +8321,63 @@ def render_dashboard_view():
     components.html(dashboard_html, height=1400, scrolling=True)
 
 
+def render_notification_popover():
+    """
+    Small bell button pinned to the top-right corner. Clicking it opens
+    the same notification panel as before (render_notification_panel),
+    inside a popover. "Show all" re-renders it with every notification.
+    """
+    import inspect
+
+    render_fn = notification_agent.render_notification_panel
+
+    try:
+        params = inspect.signature(render_fn).parameters
+    except (TypeError, ValueError):
+        params = {}
+
+    show_all_param = "show_all" if "show_all" in params else None
+    limit_param = next(
+        (
+            name
+            for name in (
+                "limit", "max_items", "top_n", "max_notifications",
+                "max_results", "n", "count",
+            )
+            if name in params
+        ),
+        None,
+    )
+    can_show_all = bool(show_all_param or limit_param)
+
+    if "notif_show_all" not in st.session_state:
+        st.session_state.notif_show_all = False
+
+    with st.container(key="notif_corner"):
+        with st.popover("🔔", help="Notifications"):
+
+            kwargs = {}
+            if st.session_state.notif_show_all:
+                if show_all_param:
+                    kwargs[show_all_param] = True
+                elif limit_param:
+                    kwargs[limit_param] = 10_000
+
+            render_fn(**kwargs)
+
+            if can_show_all:
+                label = (
+                    "Show less"
+                    if st.session_state.notif_show_all
+                    else "Show all"
+                )
+                if st.button(label, key="notif_show_all_btn", use_container_width=True):
+                    st.session_state.notif_show_all = (
+                        not st.session_state.notif_show_all
+                    )
+                    st.rerun()
+
+
 def main():
     apply_custom_styles()
     initialise_session()
@@ -8333,7 +8443,7 @@ def main():
     # top bar so it's the first thing the user sees when NOVA opens,
     # before the empty state / chat history below.
 
-    notification_agent.render_notification_panel()
+    render_notification_popover()
 
     # ================================
     # EMPTY STATE
