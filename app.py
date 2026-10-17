@@ -441,404 +441,359 @@ def apply_custom_styles():
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
 
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
         /* ==========================================================
-           NOVA — NEUMORPHISM + LIQUID GLASS
-           Skin only. Every element/widget/key is untouched.
+           NOVA — PREMIUM WORKSPACE THEME
+           Light-first · royal-blue sidebar · orange for highlights
+           Skin only: every element, widget and key is preserved.
         ========================================================== */
 
         :root {
-            --nm-bg: #ff8c1a;
-            --nm-bg-2: #f07c0a;
-            --nm-light: #ffad4f;
-            --nm-dark: #c4580a;
-            --text: #3b1d00;
-            --muted: #6b3300;
-            --accent: #ffc400;
-            --accent-ink: #5c2a00;
-            --accent-light: #ffe066;
-            --accent-soft: rgba(255,196,0,0.35);
-            --glass-bg: rgba(255,244,226,0.30);
-            --glass-bg-strong: rgba(255,244,226,0.95);
-            --glass-border: rgba(255,214,150,0.85);
-            --glass-blur: blur(22px) saturate(170%);
+            --bg: #f6f7fb;
+            --surface: #ffffff;
+            --surface-2: #f0f2f8;
+            --border: #e3e7f0;
+            --border-strong: #d2d8e6;
 
-            --raised: 8px 8px 18px var(--nm-dark), -8px -8px 18px var(--nm-light);
-            --raised-sm: 4px 4px 9px var(--nm-dark), -4px -4px 9px var(--nm-light);
-            --inset: inset 5px 5px 10px var(--nm-dark), inset -5px -5px 10px var(--nm-light);
-            --inset-sm: inset 3px 3px 6px var(--nm-dark), inset -3px -3px 6px var(--nm-light);
-            --glass-shadow: 0 8px 32px rgba(120,40,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8);
+            --text: #101a33;
+            --muted: #5b667f;
+            --faint: #8791a8;
+
+            --blue: #2557e6;
+            --blue-hover: #1d49c4;
+            --blue-soft: #e8eefe;
+            --orange: #f97316;
+            --orange-soft: #fff1e6;
+
+            --sb-bg: #12276b;
+            --sb-bg-2: #0f2159;
+            --sb-text: #eaf0ff;
+            --sb-muted: #a9b8e6;
+            --sb-hover: rgba(255,255,255,0.08);
+            --sb-active: rgba(255,255,255,0.14);
+            --sb-border: rgba(255,255,255,0.14);
+
+            --shadow-sm: 0 1px 2px rgba(16,26,51,0.06), 0 1px 3px rgba(16,26,51,0.05);
+            --shadow-md: 0 4px 14px rgba(16,26,51,0.08);
+            --shadow-lg: 0 12px 32px rgba(16,26,51,0.14);
+            --radius: 12px;
+            --radius-lg: 18px;
+            --ring: 0 0 0 3px rgba(37,87,230,0.28);
         }
 
-        /* ---------- App background (ambient glow so glass has depth) ---------- */
+        html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp button,
+        .stApp input, .stApp textarea, .stApp h1, .stApp h2, .stApp h3,
+        .stApp h4, .stApp h5, .stApp h6 {
+            font-family: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif !important;
+        }
 
-        .stApp,
-        [data-testid="stAppViewContainer"],
-        [data-testid="stMain"] {
-            background:
-                radial-gradient(900px 600px at 8% 0%, rgba(255,214,64,0.35), transparent 60%),
-                radial-gradient(800px 600px at 100% 15%, rgba(255,120,40,0.30), transparent 60%),
-                radial-gradient(700px 500px at 50% 100%, rgba(200,60,0,0.25), transparent 60%),
-                var(--nm-bg) !important;
-            background-attachment: fixed !important;
+        /* ---------- Page ---------- */
+
+        .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+            background: var(--bg) !important;
             color: var(--text) !important;
         }
 
-        [data-testid="stHeader"] {
-            background: transparent !important;
-        }
+        [data-testid="stHeader"] { background: transparent !important; }
 
         .block-container {
-            max-width: 1100px !important;
-            padding-top: 2rem !important;
-            padding-bottom: 8rem !important;
+            max-width: 820px !important;
+            padding-top: 1.2rem !important;
+            padding-bottom: 9rem !important;
         }
 
-        [data-testid="stBottom"],
-        [data-testid="stBottom"] > div,
-        [data-testid="stBottomBlockContainer"] {
-            background: transparent !important;
-        }
+        [data-testid="stBottom"], [data-testid="stBottom"] > div,
+        [data-testid="stBottomBlockContainer"] { background: transparent !important; }
 
-        h1, h2, h3, h4, h5, h6, label, .stMarkdown, [data-testid="stWidgetLabel"] p {
-            color: var(--text) !important;
-        }
+        h1, h2, h3, h4, h5, h6, label, .stMarkdown,
+        [data-testid="stWidgetLabel"] p { color: var(--text) !important; }
 
-        [data-testid="stCaptionContainer"], .stCaption, small {
-            color: var(--muted) !important;
-        }
+        [data-testid="stCaptionContainer"], .stCaption, small { color: var(--muted) !important; }
 
-        hr {
-            border: none !important;
-            height: 2px !important;
-            border-radius: 2px;
-            background: var(--nm-bg) !important;
-            box-shadow: var(--inset-sm) !important;
-        }
+        hr { border: none !important; height: 1px !important; background: var(--border) !important; }
+
+        a { color: var(--blue) !important; }
+
+        *:focus-visible { outline: 2px solid var(--blue) !important; outline-offset: 2px; }
 
         /* ==========================================================
-           SIDEBAR  (liquid glass panel)
+           SIDEBAR
         ========================================================== */
 
         [data-testid="stSidebar"] {
-            background: var(--glass-bg) !important;
-            backdrop-filter: var(--glass-blur) !important;
-            -webkit-backdrop-filter: var(--glass-blur) !important;
-            border-right: 1px solid var(--glass-border) !important;
-            box-shadow: 8px 0 32px rgba(120,40,0,0.08) !important;
+            background: linear-gradient(180deg, var(--sb-bg), var(--sb-bg-2)) !important;
+            border-right: 1px solid var(--sb-border) !important;
+            box-shadow: none !important;
         }
 
         [data-testid="stSidebar"] > div:first-child {
-            padding: 1.5rem 1rem !important;
+            padding: 1.1rem 0.85rem 1.5rem !important;
             background: transparent !important;
         }
 
-        [data-testid="stSidebar"] * {
-            color: var(--text);
-        }
+        [data-testid="stSidebar"] * { color: var(--sb-text); }
 
         .nova-sidebar-logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: var(--text) !important;
-            font-size: 1.8rem;
-            font-weight: 800;
-            letter-spacing: -0.05em;
-            margin-bottom: 2px;
+            display: flex; align-items: center; gap: 9px;
+            color: #ffffff !important; font-size: 1.35rem; font-weight: 700;
+            letter-spacing: -0.02em; margin: 0.2rem 0 0.1rem 0.25rem;
         }
-
-        .nova-sidebar-star {
-            color: var(--accent-ink) !important;
-            font-size: 2rem;
-            text-shadow: 0 0 18px rgba(255,196,0,0.45);
-        }
-
+        .nova-sidebar-star { color: var(--orange) !important; font-size: 1.4rem; }
         .nova-sidebar-subtitle {
-            color: var(--muted) !important;
-            font-size: 0.82rem;
-            margin-left: 2px;
-            margin-bottom: 1.3rem;
+            color: var(--sb-muted) !important; font-size: 0.76rem;
+            margin: 0 0 1rem 0.3rem;
         }
 
         .sidebar-section-title {
-            color: var(--muted) !important;
-            font-size: 0.68rem;
-            font-weight: 700;
-            letter-spacing: 0.13em;
-            text-transform: uppercase;
-            margin: 1.25rem 0 0.55rem;
+            color: var(--sb-muted) !important; font-size: 0.68rem; font-weight: 600;
+            letter-spacing: 0.09em; text-transform: uppercase;
+            margin: 1.1rem 0 0.4rem 0.35rem;
         }
 
-        /* ---------- Sidebar collapse / expand button ---------- */
+        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] label { color: var(--sb-text) !important; }
+        [data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+        [data-testid="stSidebar"] [data-testid="stSpinner"] p { color: var(--sb-muted) !important; }
 
-        [data-testid="stSidebar"] button[kind="headerNoPadding"],
+        /* sidebar collapse / expand controls */
         [data-testid="stSidebarCollapseButton"] button,
-        [data-testid="stExpandSidebarButton"] {
-            color: var(--text) !important;
-            background: var(--nm-bg) !important;
-            border: none !important;
-            border-radius: 12px !important;
-            box-shadow: var(--raised-sm) !important;
-            opacity: 1 !important;
+        [data-testid="stExpandSidebarButton"],
+        [data-testid="stSidebar"] button[kind="headerNoPadding"] {
+            background: transparent !important; border: none !important;
+            box-shadow: none !important; border-radius: 8px !important; opacity: 1 !important;
         }
-
-        [data-testid="stSidebar"] button[kind="headerNoPadding"] *,
-        [data-testid="stSidebar"] button[kind="headerNoPadding"] svg,
         [data-testid="stSidebarCollapseButton"] svg,
-        [data-testid="stExpandSidebarButton"] svg {
-            color: var(--text) !important;
-            fill: var(--text) !important;
-            opacity: 1 !important;
+        [data-testid="stSidebar"] button[kind="headerNoPadding"] svg { fill: var(--sb-text) !important; color: var(--sb-text) !important; }
+        [data-testid="stExpandSidebarButton"] {
+            background: var(--surface) !important; box-shadow: var(--shadow-md) !important;
+        }
+        [data-testid="stExpandSidebarButton"] svg { fill: var(--text) !important; color: var(--text) !important; }
+        [data-testid="stSidebarCollapseButton"] button:hover { background: var(--sb-hover) !important; }
+
+        /* sidebar scrolls independently */
+        [data-testid="stSidebarContent"] { overflow-y: auto !important; scrollbar-width: thin; }
+
+        /* ---------- Sidebar navigation items (default: quiet rows) ---------- */
+
+        [data-testid="stSidebar"] .stButton > button {
+            width: 100% !important; min-height: 38px !important;
+            justify-content: flex-start !important; text-align: left !important;
+            padding: 0 12px !important; border-radius: 10px !important;
+            background: transparent !important; border: 1px solid transparent !important;
+            box-shadow: none !important; color: var(--sb-text) !important;
+            font-size: 0.88rem !important; font-weight: 500 !important;
+            transition: background .15s ease, border-color .15s ease !important;
+        }
+        [data-testid="stSidebar"] .stButton > button p { color: var(--sb-text) !important; text-align: left !important; }
+        [data-testid="stSidebar"] .stButton > button:hover { background: var(--sb-hover) !important; border-color: var(--sb-border) !important; }
+        [data-testid="stSidebar"] .stButton > button:active { background: var(--sb-active) !important; }
+        [data-testid="stSidebar"] .stButton > button:disabled { opacity: 0.45 !important; cursor: not-allowed !important; }
+        [data-testid="stSidebar"] .stButton > button:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,0.55) !important; outline: none !important; }
+
+        /* New Chat = the one prominent action (orange) */
+        [data-testid="stSidebar"] .st-key-nav_new_chat .stButton > button {
+            background: var(--orange) !important; border-color: var(--orange) !important;
+            color: #ffffff !important; font-weight: 600 !important;
+            justify-content: center !important; min-height: 42px !important;
+            box-shadow: 0 4px 12px rgba(249,115,22,0.35) !important;
+        }
+        [data-testid="stSidebar"] .st-key-nav_new_chat .stButton > button p { color: #ffffff !important; text-align: center !important; }
+        [data-testid="stSidebar"] .st-key-nav_new_chat .stButton > button:hover { background: #ea6a0f !important; }
+
+        /* Danger / housekeeping actions = small muted text-links */
+        [data-testid="stSidebar"] [class*="st-key-danger_"] .stButton > button,
+        [data-testid="stSidebar"] [class*="st-key-danger_"] [data-testid="stPopover"] > div > button,
+        [data-testid="stSidebar"] [class*="st-key-danger_"] button[data-testid="stPopoverButton"] {
+            min-height: 30px !important; height: 30px !important;
+            font-size: 0.78rem !important; color: var(--sb-muted) !important;
+            background: transparent !important; border: 1px solid transparent !important;
+            box-shadow: none !important; padding: 0 10px !important;
+        }
+        [data-testid="stSidebar"] [class*="st-key-danger_"] button p { color: var(--sb-muted) !important; font-size: 0.78rem !important; }
+        [data-testid="stSidebar"] [class*="st-key-danger_"] button:hover { background: rgba(239,68,68,0.16) !important; border-color: transparent !important; }
+        [data-testid="stSidebar"] [class*="st-key-danger_"] button:hover p { color: #ffb4b4 !important; }
+
+        /* ---------- Conversation history ---------- */
+
+        [data-testid="stSidebar"] .st-key-conversation_list {
+            max-height: 280px; overflow-y: auto; margin: 0 !important; padding: 0 2px 0 0 !important;
+            scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent;
+        }
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton { margin: 0 !important; }
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button {
+            min-height: 36px !important; height: 36px !important; margin: 1px 0 !important;
+            overflow: hidden !important; font-size: 0.85rem !important; font-weight: 400 !important;
+        }
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button > div {
+            width: 100% !important; justify-content: flex-start !important; margin: 0 !important; padding: 0 !important;
+        }
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button p {
+            width: 100% !important; margin: 0 !important; white-space: nowrap !important;
+            overflow: hidden !important; text-overflow: ellipsis !important; font-size: 0.85rem !important;
+        }
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat {
+            background: var(--sb-active) !important; box-shadow: inset 3px 0 0 var(--orange) !important;
         }
 
-        [data-testid="stSidebar"] button[kind="headerNoPadding"]:hover {
-            box-shadow: var(--inset-sm) !important;
+        /* ---------- Sidebar expanders (accordions) ---------- */
+
+        [data-testid="stSidebar"] [data-testid="stExpander"] {
+            background: rgba(255,255,255,0.05) !important; border: 1px solid var(--sb-border) !important;
+            border-radius: 10px !important; box-shadow: none !important; margin-bottom: 0.35rem;
+        }
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary,
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary p,
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary span {
+            color: var(--sb-text) !important; font-size: 0.86rem; font-weight: 500;
+        }
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary svg { fill: var(--sb-text) !important; color: var(--sb-text) !important; }
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover { background: var(--sb-hover) !important; }
+
+        [data-testid="stSidebar"] [data-testid="stFileUploaderFile"] { background: var(--surface) !important; }
+        [data-testid="stSidebar"] [data-testid="stFileUploaderFile"] * { color: var(--text) !important; }
+
+        .nova-sidebar-note {
+            margin-top: 1.2rem; padding: 0.8rem 0.9rem; border: 1px solid var(--sb-border);
+            border-radius: 10px; background: rgba(255,255,255,0.06);
+            color: var(--sb-muted); font-size: 0.74rem; line-height: 1.5;
         }
 
         /* ==========================================================
-           BUTTONS  (raised -> pressed)
+           BUTTONS (main area)
         ========================================================== */
 
-        .stButton > button,
-        .stDownloadButton > button,
-        .stFormSubmitButton > button,
-        [data-testid="stBaseButton-secondary"],
-        [data-testid="stBaseButton-primary"] {
-            min-height: 42px !important;
-            background: var(--nm-bg) !important;
-            background-color: var(--nm-bg) !important;
-            color: var(--text) !important;
-            border: 1px solid rgba(255,255,255,0.55) !important;
-            border-radius: 14px !important;
-            box-shadow: var(--raised-sm) !important;
-            font-size: 0.88rem !important;
-            font-weight: 600 !important;
-            transition: box-shadow 0.18s ease, transform 0.15s ease, color 0.18s ease !important;
+        .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button,
+        [data-testid="stBaseButton-secondary"] {
+            min-height: 40px !important; background: var(--surface) !important;
+            color: var(--text) !important; border: 1px solid var(--border-strong) !important;
+            border-radius: var(--radius) !important; box-shadow: var(--shadow-sm) !important;
+            font-size: 0.88rem !important; font-weight: 500 !important;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .1s ease !important;
         }
-
-        .stButton > button p,
-        .stDownloadButton > button p {
-            color: inherit !important;
+        .stButton > button p, .stDownloadButton > button p { color: inherit !important; }
+        .stButton > button:hover, .stDownloadButton > button:hover, .stFormSubmitButton > button:hover {
+            border-color: var(--blue) !important; color: var(--blue) !important; box-shadow: var(--shadow-md) !important;
         }
-
-        .stButton > button:hover,
-        .stDownloadButton > button:hover,
-        .stFormSubmitButton > button:hover {
-            color: var(--accent-ink) !important;
-            border-color: rgba(255,196,0,0.25) !important;
-            box-shadow: 6px 6px 13px var(--nm-dark), -6px -6px 13px var(--nm-light) !important;
-        }
-
-        .stButton > button:active,
-        .stDownloadButton > button:active,
-        .stFormSubmitButton > button:active {
-            box-shadow: var(--inset-sm) !important;
-            transform: scale(0.985);
-        }
+        .stButton > button:active, .stDownloadButton > button:active, .stFormSubmitButton > button:active { transform: scale(0.985); }
+        .stButton > button:disabled { opacity: 0.5 !important; cursor: not-allowed !important; }
 
         [data-testid="stBaseButton-primary"] {
-            background: linear-gradient(145deg, var(--accent-light), var(--accent)) !important;
-            color: #ffffff !important;
-            border-color: rgba(255,255,255,0.25) !important;
-            box-shadow: 5px 5px 12px rgba(255,196,0,0.35), -4px -4px 10px var(--nm-light) !important;
+            background: var(--blue) !important; border-color: var(--blue) !important;
+            color: #ffffff !important; font-weight: 600 !important; box-shadow: var(--shadow-sm) !important;
         }
-
         [data-testid="stBaseButton-primary"] p { color: #ffffff !important; }
-
-        [data-testid="stSidebar"] .stButton { width: 100% !important; }
-        [data-testid="stSidebar"] .stButton > button { width: 100% !important; }
+        [data-testid="stBaseButton-primary"]:hover { background: var(--blue-hover) !important; color: #ffffff !important; }
 
         /* ==========================================================
-           INPUTS, SELECTS, UPLOADER  (inset wells)
+           INPUTS / SELECTS / UPLOADER
         ========================================================== */
 
-        div[data-baseweb="input"],
-        div[data-baseweb="base-input"],
-        div[data-baseweb="textarea"],
-        div[data-baseweb="select"] > div,
-        [data-testid="stNumberInput"] div[data-baseweb="input"],
-        [data-testid="stDateInput"] div[data-baseweb="input"],
-        [data-testid="stTimeInput"] div[data-baseweb="select"] > div {
-            background: var(--nm-bg) !important;
-            background-color: var(--nm-bg) !important;
-            border: 1px solid transparent !important;
-            border-radius: 14px !important;
-            box-shadow: var(--inset) !important;
-            min-height: 42px;
+        div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="textarea"],
+        div[data-baseweb="select"] > div {
+            background: var(--surface) !important; border: 1px solid var(--border-strong) !important;
+            border-radius: 10px !important; box-shadow: none !important; min-height: 40px;
         }
+        div[data-baseweb="input"] > div, div[data-baseweb="base-input"],
+        div[data-baseweb="select"] > div > div { background: transparent !important; }
 
-        div[data-baseweb="input"] > div,
-        div[data-baseweb="base-input"],
-        div[data-baseweb="select"] > div > div {
-            background: transparent !important;
+        input, textarea, div[data-baseweb="select"] * {
+            color: var(--text) !important; -webkit-text-fill-color: var(--text) !important;
         }
+        input::placeholder, textarea::placeholder { color: var(--faint) !important; -webkit-text-fill-color: var(--faint) !important; }
+        div[data-baseweb="select"] svg { fill: var(--muted) !important; }
 
-        input, textarea,
-        div[data-baseweb="select"] *,
-        div[data-baseweb="input"] input {
-            color: var(--text) !important;
-            -webkit-text-fill-color: var(--text) !important;
-        }
-
-        input::placeholder, textarea::placeholder {
-            color: #8a4a10 !important;
-            -webkit-text-fill-color: #8a4a10 !important;
-        }
-
-        div[data-baseweb="select"] svg {
-            fill: var(--muted) !important;
-            color: var(--muted) !important;
-        }
-
-        input:focus,
-        div[data-baseweb="input"]:focus-within,
-        div[data-baseweb="textarea"]:focus-within,
+        div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-within,
         div[data-baseweb="select"]:focus-within > div {
-            outline: none !important;
-            box-shadow: var(--inset), 0 0 0 2px rgba(255,196,0,0.35) !important;
+            border-color: var(--blue) !important; box-shadow: var(--ring) !important;
         }
 
-        /* Number input +/- steppers */
         [data-testid="stNumberInput"] button {
-            background: var(--nm-bg) !important;
-            color: var(--text) !important;
-            border: none !important;
-            box-shadow: var(--raised-sm) !important;
-            border-radius: 10px !important;
+            background: var(--surface-2) !important; color: var(--text) !important;
+            border: none !important; box-shadow: none !important; border-radius: 8px !important;
         }
 
-        /* ---------- Dropdown menus / popovers (glass) ---------- */
-
-        div[data-baseweb="popover"],
-        div[data-baseweb="popover"] > div,
-        div[data-baseweb="menu"],
-        ul[role="listbox"] {
-            background: var(--glass-bg-strong) !important;
-            backdrop-filter: var(--glass-blur) !important;
-            -webkit-backdrop-filter: var(--glass-blur) !important;
-            border: 1px solid var(--glass-border) !important;
-            border-radius: 16px !important;
-            box-shadow: var(--glass-shadow) !important;
+        div[data-baseweb="popover"], div[data-baseweb="popover"] > div, div[data-baseweb="menu"], ul[role="listbox"] {
+            background: var(--surface) !important; border: 1px solid var(--border) !important;
+            border-radius: 12px !important; box-shadow: var(--shadow-lg) !important;
         }
-
-        div[data-baseweb="popover"] [role="option"],
-        ul[role="listbox"] li {
-            background: transparent !important;
-            color: var(--text) !important;
-            border-radius: 10px !important;
+        div[data-baseweb="popover"] [role="option"], ul[role="listbox"] li {
+            background: transparent !important; color: var(--text) !important; border-radius: 8px !important;
         }
-
-        div[data-baseweb="popover"] [role="option"]:hover,
-        div[data-baseweb="popover"] [aria-selected="true"],
-        ul[role="listbox"] li:hover {
-            background: var(--accent-soft) !important;
-            color: var(--accent-ink) !important;
+        div[data-baseweb="popover"] [role="option"]:hover, div[data-baseweb="popover"] [aria-selected="true"], ul[role="listbox"] li:hover {
+            background: var(--blue-soft) !important; color: var(--blue) !important;
         }
-
-        /* Calendar popup */
-        div[data-baseweb="calendar"] {
-            background: transparent !important;
-            color: var(--text) !important;
-        }
-
-        /* ---------- File uploader ---------- */
+        div[data-baseweb="calendar"] { background: transparent !important; color: var(--text) !important; }
 
         [data-testid="stFileUploader"] { width: 100% !important; }
-
         [data-testid="stFileUploader"] section {
-            background: var(--nm-bg) !important;
-            border: 1px dashed rgba(255,196,0,0.35) !important;
-            border-radius: 16px !important;
-            box-shadow: var(--inset) !important;
-            padding: 0.8rem !important;
+            background: var(--surface-2) !important; border: 1px dashed var(--border-strong) !important;
+            border-radius: 12px !important; box-shadow: none !important; padding: 0.8rem !important;
         }
-
         [data-testid="stFileUploader"] section > div { background: transparent !important; }
-
-        [data-testid="stFileUploader"] label,
-        [data-testid="stFileUploader"] span,
-        [data-testid="stFileUploader"] p { color: var(--text) !important; }
-
+        [data-testid="stFileUploader"] section span, [data-testid="stFileUploader"] section p { color: var(--text) !important; }
         [data-testid="stFileUploader"] small { color: var(--muted) !important; }
-
         [data-testid="stFileUploader"] button {
-            background: var(--nm-bg) !important;
-            color: var(--text) !important;
-            border: none !important;
-            border-radius: 12px !important;
-            box-shadow: var(--raised-sm) !important;
-        }
-
-        [data-testid="stFileUploader"] button:hover { color: var(--accent-ink) !important; }
-
-        [data-testid="stFileUploaderFile"] {
-            background: var(--glass-bg) !important;
-            border-radius: 12px !important;
+            background: var(--surface) !important; color: var(--text) !important;
+            border: 1px solid var(--border-strong) !important; border-radius: 10px !important; box-shadow: var(--shadow-sm) !important;
         }
 
         /* ==========================================================
-           EXPANDERS  (raised cards)
+           EXPANDERS (main area)
         ========================================================== */
 
         [data-testid="stExpander"] {
-            background: var(--nm-bg) !important;
-            border: 1px solid rgba(255,255,255,0.55) !important;
-            border-radius: 16px !important;
-            box-shadow: var(--raised-sm) !important;
-            overflow: hidden;
+            background: var(--surface) !important; border: 1px solid var(--border) !important;
+            border-radius: 12px !important; box-shadow: var(--shadow-sm) !important; overflow: hidden;
         }
-
-        [data-testid="stExpander"] details,
-        [data-testid="stExpander"] summary { background: transparent !important; }
-
-        [data-testid="stExpander"] summary,
-        [data-testid="stExpander"] summary p,
-        [data-testid="stExpander"] summary span {
-            color: var(--text) !important;
-            font-weight: 600;
-        }
-
-        [data-testid="stExpander"] summary svg {
-            fill: var(--text) !important;
-            color: var(--text) !important;
-        }
-
-        [data-testid="stExpander"] summary:hover,
-        [data-testid="stExpander"] summary:hover p { color: var(--accent-ink) !important; }
+        [data-testid="stExpander"] details, [data-testid="stExpander"] summary { background: transparent !important; }
+        [data-testid="stExpander"] summary, [data-testid="stExpander"] summary p,
+        [data-testid="stExpander"] summary span { color: var(--text) !important; font-weight: 500; }
+        [data-testid="stExpander"] summary svg { fill: var(--muted) !important; }
+        [data-testid="stExpander"] summary:hover { background: var(--surface-2) !important; }
 
         /* ==========================================================
-           MAIN HEADER
+           HEADER
         ========================================================== */
 
         .nova-topbar {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 3rem;
+            display: flex; align-items: center; justify-content: flex-start;
+            padding: 0.2rem 0 0.9rem; margin-bottom: 0.8rem;
+            border-bottom: 1px solid var(--border);
         }
-
         .nova-top-logo {
-            color: var(--text);
-            font-size: 2.1rem;
-            font-weight: 800;
-            letter-spacing: -0.04em;
-            padding: 0.55rem 1.8rem;
-            border-radius: 999px;
-            background: var(--glass-bg);
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--raised-sm), var(--glass-shadow);
+            display: inline-flex; align-items: center; gap: 8px; padding: 0;
+            background: none !important; border: none !important; box-shadow: none !important;
+            color: var(--text) !important; font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em;
+        }
+        .nova-top-logo span {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 8px; font-size: 0.95rem;
+            background: linear-gradient(135deg, var(--blue), #4f7dff); color: #ffffff !important;
         }
 
-        .nova-top-logo span {
-            color: var(--accent-ink);
-            margin-right: 8px;
-            font-size: 2.3rem;
-            text-shadow: 0 0 18px rgba(255,196,0,0.5);
+        /* notification bell lives in the header, top-right */
+        .st-key-notif_corner {
+            position: fixed !important; top: 0.75rem; right: 1.2rem; width: auto !important; z-index: 999990;
+        }
+        .st-key-notif_corner [data-testid="stPopover"] { width: auto !important; }
+        .st-key-notif_corner [data-testid="stPopover"] > div > button,
+        .st-key-notif_corner button[data-testid="stPopoverButton"] {
+            width: 38px !important; height: 38px !important; min-height: 38px !important;
+            padding: 0 !important; border-radius: 50% !important; justify-content: center !important;
+            background: var(--surface) !important; border: 1px solid var(--border-strong) !important;
+            box-shadow: var(--shadow-md) !important; font-size: 1rem !important;
+        }
+        .st-key-notif_corner [data-testid="stPopover"] button:hover { border-color: var(--blue) !important; }
+        .st-key-notif_corner [data-testid="stPopover"] button [data-testid="stIconMaterial"],
+        .st-key-notif_corner [data-testid="stPopover"] button svg { display: none !important; }
+
+        div[data-testid="stPopoverBody"] {
+            width: min(760px, 92vw) !important; max-width: 92vw !important;
+            max-height: 75vh !important; overflow-y: auto !important;
+            background: var(--surface) !important; border: 1px solid var(--border) !important;
+            border-radius: 16px !important; box-shadow: var(--shadow-lg) !important;
         }
 
         /* ==========================================================
@@ -846,599 +801,182 @@ def apply_custom_styles():
         ========================================================== */
 
         .nova-empty-state {
-            min-height: 58vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding-bottom: 2rem;
+            min-height: 34vh; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center; padding: 3vh 0 1.2rem;
         }
-
         .nova-empty-star {
-            color: var(--accent-ink);
-            font-size: 1.7rem;
-            margin-bottom: 0.8rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 48px; height: 48px; border-radius: 14px; margin-bottom: 1rem;
+            color: #ffffff; font-size: 1.4rem; box-shadow: var(--shadow-md);
+            background: linear-gradient(135deg, var(--blue), #4f7dff);
         }
-
         .nova-empty-state h1 {
-            color: var(--text) !important;
-            font-size: clamp(2.8rem, 5vw, 4rem);
-            font-weight: 750;
-            letter-spacing: -0.06em;
-            line-height: 1;
-            margin: 0;
-            text-shadow: 3px 3px 6px var(--nm-dark), -3px -3px 6px var(--nm-light);
+            color: var(--text) !important; font-size: clamp(1.8rem, 3.6vw, 2.4rem);
+            font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; margin: 0; text-shadow: none !important;
         }
+        .nova-empty-state p { color: var(--muted) !important; font-size: 1rem; margin-top: 0.7rem; max-width: 520px; line-height: 1.55; }
 
-        .nova-empty-state p {
-            color: var(--muted) !important;
-            font-size: 1.05rem;
-            margin-top: 1rem;
+        /* suggested prompts */
+        .st-key-suggest_row .stButton > button {
+            min-height: 64px !important; height: auto !important; padding: 0.7rem 1rem !important;
+            justify-content: flex-start !important; text-align: left !important;
+            border-radius: 14px !important; background: var(--surface) !important;
+            border: 1px solid var(--border) !important; box-shadow: var(--shadow-sm) !important;
+            color: var(--text) !important; font-weight: 500 !important; line-height: 1.35 !important;
+        }
+        .st-key-suggest_row .stButton > button p { text-align: left !important; font-size: 0.9rem !important; }
+        .st-key-suggest_row .stButton > button:hover {
+            border-color: var(--orange) !important; background: var(--orange-soft) !important;
+            color: var(--text) !important; transform: translateY(-1px);
         }
 
         /* ==========================================================
-           CHAT MESSAGES  (liquid glass cards)
+           CHAT MESSAGES  (open layout, no heavy cards)
         ========================================================== */
 
         [data-testid="stChatMessage"] {
-            border-radius: 22px !important;
-            border: 1px solid var(--glass-border) !important;
-            background: var(--glass-bg) !important;
-            backdrop-filter: var(--glass-blur) !important;
-            -webkit-backdrop-filter: var(--glass-blur) !important;
-            box-shadow: var(--raised-sm), var(--glass-shadow) !important;
-            padding: 0.9rem 1.1rem !important;
-            margin: 1rem 0 !important;
+            background: transparent !important; border: none !important; box-shadow: none !important;
+            backdrop-filter: none !important; padding: 0.9rem 0.2rem !important; margin: 0 !important;
+            border-radius: 0 !important; line-height: 1.65;
+        }
+        [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li,
+        [data-testid="stChatMessage"] span { color: var(--text) !important; font-size: 0.97rem; line-height: 1.65; }
+        [data-testid="stChatMessage"] h1, [data-testid="stChatMessage"] h2,
+        [data-testid="stChatMessage"] h3 { color: var(--text) !important; letter-spacing: -0.01em; }
+
+        /* user messages: soft blue bubble (messages with the user avatar) */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+            background: var(--blue-soft) !important; border: 1px solid #d5e0fb !important;
+            border-radius: 16px !important; padding: 0.8rem 1rem !important; margin: 0.8rem 0 !important;
+        }
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+            border-bottom: 1px solid var(--border) !important;
         }
 
-        [data-testid="stChatMessage"] p,
-        [data-testid="stChatMessage"] li,
-        [data-testid="stChatMessage"] span,
-        [data-testid="stChatMessage"] h1,
-        [data-testid="stChatMessage"] h2,
-        [data-testid="stChatMessage"] h3 { color: var(--text) !important; }
-
-        [data-testid="stChatMessageAvatarUser"],
-        [data-testid="stChatMessageAvatarAssistant"],
         [data-testid^="stChatMessageAvatar"] {
-            background: var(--nm-bg) !important;
-            color: var(--accent-ink) !important;
-            border-radius: 50% !important;
-            box-shadow: var(--raised-sm) !important;
+            background: var(--surface) !important; color: var(--blue) !important;
+            border: 1px solid var(--border) !important; border-radius: 50% !important; box-shadow: none !important;
         }
+        [data-testid="stChatMessageAvatarAssistant"] { background: var(--blue) !important; color: #ffffff !important; border-color: var(--blue) !important; }
 
-        /* code blocks & tables inside answers */
         pre, code, [data-testid="stCode"], [data-testid="stCodeBlock"] {
-            background: var(--nm-bg) !important;
-            color: var(--text) !important;
-            border-radius: 12px !important;
+            background: #0f172a !important; color: #e6edf7 !important; border-radius: 10px !important;
         }
+        code { padding: 0.1rem 0.35rem; font-size: 0.88em; }
+        pre code { background: transparent !important; padding: 0; }
 
-        pre { box-shadow: var(--inset-sm) !important; }
-
-        .stMarkdown table { border-collapse: separate; border-spacing: 0; }
-
+        .stMarkdown table { border-collapse: separate; border-spacing: 0; width: 100%; display: block; overflow-x: auto; }
         .stMarkdown th, .stMarkdown td {
-            border-color: rgba(0,0,0,0.06) !important;
-            color: var(--text) !important;
-            background: transparent !important;
+            border: 1px solid var(--border) !important; color: var(--text) !important;
+            background: transparent !important; padding: 0.45rem 0.7rem !important;
         }
+        .stMarkdown th { background: var(--surface-2) !important; font-weight: 600; }
 
         /* ==========================================================
-           CHAT INPUT  (inset neumorphic pill)
+           COMPOSER  (the one liquid-glass surface)
         ========================================================== */
 
-        [data-testid="stChatInput"] {
-            background: transparent !important;
-            border: none !important;
-            padding: 0 !important;
-        }
-
+        [data-testid="stChatInput"] { background: transparent !important; border: none !important; padding: 0 !important; }
         [data-testid="stChatInput"] > div {
-            background: var(--nm-bg) !important;
-            border: 1px solid rgba(255,255,255,0.6) !important;
-            border-radius: 26px !important;
-            box-shadow: var(--inset), 0 10px 30px rgba(120,40,0,0.10) !important;
-            padding: 0.4rem 0.55rem !important;
+            background: rgba(255,255,255,0.78) !important;
+            backdrop-filter: blur(18px) saturate(160%) !important;
+            -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+            border: 1px solid var(--border-strong) !important; border-radius: 22px !important;
+            box-shadow: var(--shadow-lg) !important; padding: 0.35rem 0.5rem !important;
         }
-
+        [data-testid="stChatInput"] > div:focus-within { border-color: var(--blue) !important; box-shadow: var(--shadow-lg), var(--ring) !important; }
         [data-testid="stChatInput"] textarea {
-            color: var(--text) !important;
-            -webkit-text-fill-color: var(--text) !important;
-            background: transparent !important;
-            font-size: 1rem !important;
-            box-shadow: none !important;
+            background: transparent !important; box-shadow: none !important;
+            color: var(--text) !important; -webkit-text-fill-color: var(--text) !important;
+            font-size: 1rem !important; max-height: 220px !important;
         }
-
-        [data-testid="stChatInput"] textarea::placeholder {
-            color: #8a4a10 !important;
-            -webkit-text-fill-color: #8a4a10 !important;
-        }
-
         [data-testid="stChatInput"] button {
-            background: linear-gradient(145deg, var(--accent-light), var(--accent)) !important;
-            color: #ffffff !important;
-            border-radius: 50% !important;
-            border: none !important;
-            box-shadow: 4px 4px 10px rgba(255,196,0,0.35), -3px -3px 8px var(--nm-light) !important;
+            background: var(--blue) !important; color: #ffffff !important; border: none !important;
+            border-radius: 50% !important; box-shadow: none !important;
         }
-
+        [data-testid="stChatInput"] button:hover { background: var(--blue-hover) !important; }
+        [data-testid="stChatInput"] button:disabled { background: var(--border-strong) !important; }
         [data-testid="stChatInput"] button svg { fill: #ffffff !important; color: #ffffff !important; }
 
-        [data-testid="stChatInput"] button:hover { filter: brightness(1.08); }
-
-        /* Native mic / audio recorder */
-        [data-testid="stAudioInput"],
-        [data-testid="stAudioInput"] > div {
-            background: var(--nm-bg) !important;
-            border-radius: 16px !important;
-            box-shadow: var(--inset-sm) !important;
+        [data-testid="stAudioInput"], [data-testid="stAudioInput"] > div {
+            background: var(--surface) !important; border: 1px solid var(--border) !important;
+            border-radius: 12px !important; box-shadow: none !important;
         }
-
-        audio { border-radius: 14px; filter: sepia(0.05) saturate(0.9); }
 
         /* ==========================================================
-           FOLLOW-UP BUTTONS
+           FOLLOW-UPS
         ========================================================== */
 
-        .followup-title {
-            color: var(--text);
-            font-weight: 700;
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-        }
-
+        .followup-title { color: var(--muted); font-size: 0.8rem; font-weight: 600; margin: 1rem 0 0.4rem; letter-spacing: 0.02em; }
         .st-key-followup_row .stButton > button {
-            background: var(--glass-bg) !important;
-            backdrop-filter: var(--glass-blur) !important;
-            -webkit-backdrop-filter: var(--glass-blur) !important;
-            border: 1px solid var(--glass-border) !important;
-            color: var(--accent-ink) !important;
-            border-radius: 16px !important;
-            box-shadow: var(--raised-sm) !important;
+            background: var(--surface) !important; color: var(--text) !important;
+            border: 1px solid var(--border-strong) !important; border-radius: 999px !important;
+            min-height: 36px !important; font-size: 0.84rem !important; box-shadow: none !important;
         }
-
-        .st-key-followup_row .stButton > button:hover {
-            box-shadow: var(--inset-sm) !important;
-        }
+        .st-key-followup_row .stButton > button p { color: var(--text) !important; }
+        .st-key-followup_row .stButton > button:hover { border-color: var(--orange) !important; background: var(--orange-soft) !important; color: var(--text) !important; }
 
         /* ==========================================================
-           ALERTS / STATUS / SPINNER / TOAST  (glass)
+           ALERTS / STATUS / TABS / DIALOGS
         ========================================================== */
 
-        [data-testid="stAlert"],
-        [data-testid="stNotification"],
-        [data-testid="stStatusWidget"],
-        [data-testid="stStatus"],
-        [data-testid="stToast"] {
-            background: var(--glass-bg-strong) !important;
-            backdrop-filter: var(--glass-blur) !important;
-            -webkit-backdrop-filter: var(--glass-blur) !important;
-            border: 1px solid var(--glass-border) !important;
-            border-radius: 16px !important;
-            box-shadow: var(--glass-shadow) !important;
-            color: var(--text) !important;
+        [data-testid="stAlert"], [data-testid="stNotification"], [data-testid="stStatus"], [data-testid="stToast"] {
+            background: var(--surface) !important; border: 1px solid var(--border) !important;
+            border-radius: 12px !important; box-shadow: var(--shadow-sm) !important; color: var(--text) !important;
         }
-
-        [data-testid="stAlert"] p, [data-testid="stAlert"] div,
-        [data-testid="stToast"] p { color: var(--text) !important; }
-
+        [data-testid="stAlert"] p, [data-testid="stAlert"] div, [data-testid="stToast"] p { color: var(--text) !important; }
         [data-testid="stSpinner"] p { color: var(--muted) !important; }
 
-        /* ==========================================================
-           DATA TABLES / EDITOR / TABS / CHECKS / DIALOGS
-        ========================================================== */
-
-        [data-testid="stDataFrame"],
-        [data-testid="stDataEditor"],
-        [data-testid="stTable"] {
-            background: var(--nm-bg) !important;
-            border-radius: 16px !important;
-            box-shadow: var(--inset-sm) !important;
-            padding: 4px;
-            overflow: hidden;
+        [data-testid="stDataFrame"], [data-testid="stDataEditor"], [data-testid="stTable"] {
+            border: 1px solid var(--border); border-radius: 12px !important; overflow: hidden;
         }
 
-        .stTabs [data-baseweb="tab-list"] {
-            background: var(--nm-bg) !important;
-            border-radius: 16px !important;
-            box-shadow: var(--inset-sm) !important;
-            padding: 4px !important;
-            gap: 4px !important;
+        .stTabs [data-baseweb="tab-list"] { background: var(--surface-2) !important; border-radius: 12px !important; padding: 4px !important; gap: 4px !important; }
+        .stTabs [data-baseweb="tab"] { border-radius: 8px !important; color: var(--muted) !important; background: transparent !important; }
+        .stTabs [aria-selected="true"] { color: var(--blue) !important; background: var(--surface) !important; box-shadow: var(--shadow-sm) !important; }
+        .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none !important; }
+
+        div[role="dialog"], [data-testid="stDialog"] > div > div {
+            background: var(--surface) !important; border: 1px solid var(--border) !important;
+            border-radius: 18px !important; box-shadow: var(--shadow-lg) !important;
         }
 
-        .stTabs [data-baseweb="tab"] {
-            border-radius: 12px !important;
-            color: var(--muted) !important;
-            background: transparent !important;
-        }
+        [data-testid="stProgress"] > div > div { background: var(--surface-2) !important; }
+        [data-testid="stProgress"] > div > div > div { background: var(--blue) !important; }
 
-        .stTabs [aria-selected="true"] {
-            color: var(--accent-ink) !important;
-            background: var(--nm-bg) !important;
-            box-shadow: var(--raised-sm) !important;
-        }
-
-        .stTabs [data-baseweb="tab-highlight"],
-        .stTabs [data-baseweb="tab-border"] { display: none !important; }
-
-        [data-testid="stCheckbox"] label span[data-baseweb="checkbox"] > div,
-        [data-baseweb="radio"] > div:first-child {
-            background: var(--nm-bg) !important;
-            border-color: transparent !important;
-            box-shadow: var(--inset-sm) !important;
-        }
-
-        div[role="dialog"],
-        [data-testid="stDialog"] > div > div {
-            background: var(--glass-bg-strong) !important;
-            backdrop-filter: var(--glass-blur) !important;
-            -webkit-backdrop-filter: var(--glass-blur) !important;
-            border: 1px solid var(--glass-border) !important;
-            border-radius: 24px !important;
-            box-shadow: var(--glass-shadow) !important;
-        }
-
-        [data-testid="stProgress"] > div > div { background: var(--nm-bg) !important; box-shadow: var(--inset-sm) !important; }
-        [data-testid="stProgress"] > div > div > div { background: linear-gradient(90deg, var(--accent-light), var(--accent)) !important; }
-
-        /* ==========================================================
-           LOADER
-        ========================================================== */
+        /* ---------- Loader ---------- */
 
         .nova-loader {
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,196,0,0.18);
-            border-top-color: var(--accent-ink);
-            border-radius: 50%;
-            animation: nova-spin 0.8s linear infinite;
-            display: inline-block;
-            margin-right: 10px;
-            vertical-align: middle;
-            box-shadow: 0 0 12px rgba(255,196,0,0.25);
+            width: 16px; height: 16px; border: 2px solid rgba(37,87,230,0.2); border-top-color: var(--blue);
+            border-radius: 50%; animation: nova-spin 0.8s linear infinite;
+            display: inline-block; margin-right: 8px; vertical-align: middle;
         }
-
         @keyframes nova-spin { to { transform: rotate(360deg); } }
 
-        /* ==========================================================
-           FOOTER / HIDDEN INSTRUCTION
-        ========================================================== */
-
-        .nova-footer {
-            text-align: center;
-            color: var(--muted);
-            font-size: 0.72rem;
-            margin-top: 0.7rem;
-        }
-
+        .nova-footer { text-align: center; color: var(--faint); font-size: 0.72rem; margin-top: 0.7rem; }
         [data-testid="InputInstructions"] { display: none !important; }
-
-        /* ==========================================================
-           CONVERSATION LIST  (flat rows -> inset when active)
-        ========================================================== */
-
-        [data-testid="stSidebar"] .st-key-conversation_list {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button {
-            width: 100% !important;
-            min-height: 38px !important;
-            height: 38px !important;
-            margin: 2px 0 !important;
-            padding: 0 12px !important;
-            background: transparent !important;
-            background-color: transparent !important;
-            border: 1px solid transparent !important;
-            border-radius: 12px !important;
-            color: var(--text) !important;
-            font-size: 0.86rem !important;
-            font-weight: 500 !important;
-            text-align: left !important;
-            justify-content: flex-start !important;
-            align-items: center !important;
-            box-shadow: none !important;
-            overflow: hidden !important;
-        }
-
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button > div {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: flex-start !important;
-            text-align: left !important;
-        }
-
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button p {
-            color: var(--text) !important;
-            background: transparent !important;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            font-size: 0.86rem !important;
-            text-align: left !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover {
-            background: var(--glass-bg) !important;
-            border-color: var(--glass-border) !important;
-            box-shadow: var(--raised-sm) !important;
-            color: var(--accent-ink) !important;
-        }
-
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover p {
-            color: var(--accent-ink) !important;
-        }
-
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:active,
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat {
-            background: var(--nm-bg) !important;
-            border-color: transparent !important;
-            box-shadow: var(--inset-sm) !important;
-        }
-
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat p {
-            color: var(--accent-ink) !important;
-            font-weight: 700 !important;
-        }
-
-
-        /* ==========================================================
-           NOTIFICATION BELL  (top-right, small)
-        ========================================================== */
-
-        .st-key-notif_corner {
-            position: fixed !important;
-            top: 3.6rem;
-            right: 1.6rem;
-            width: auto !important;
-            z-index: 999990;
-        }
-
-        .st-key-notif_corner [data-testid="stPopover"] { width: auto !important; }
-
-        .st-key-notif_corner [data-testid="stPopover"] > div > button,
-        .st-key-notif_corner button[data-testid="stPopoverButton"] {
-            width: 40px !important;
-            height: 40px !important;
-            min-height: 40px !important;
-            padding: 0 !important;
-            border-radius: 50% !important;
-            font-size: 1.05rem !important;
-            justify-content: center !important;
-            background: var(--glass-bg) !important;
-            backdrop-filter: var(--glass-blur) !important;
-            -webkit-backdrop-filter: var(--glass-blur) !important;
-            border: 1px solid var(--glass-border) !important;
-            box-shadow: var(--raised-sm) !important;
-        }
-
-        .st-key-notif_corner [data-testid="stPopover"] button:active {
-            box-shadow: var(--inset-sm) !important;
-        }
-
-        /* hide the dropdown chevron so it stays a compact round button */
-        .st-key-notif_corner [data-testid="stPopover"] button [data-testid="stIconMaterial"],
-        .st-key-notif_corner [data-testid="stPopover"] button svg { display: none !important; }
-
-        /* popover body = the full panel, at its normal width */
-        div[data-testid="stPopoverBody"] {
-            width: min(1000px, 92vw) !important;
-            max-width: 92vw !important;
-            max-height: 75vh !important;
-            overflow-y: auto !important;
-            background: var(--glass-bg-strong) !important;
-            backdrop-filter: var(--glass-blur) !important;
-            -webkit-backdrop-filter: var(--glass-blur) !important;
-            border: 1px solid var(--glass-border) !important;
-            border-radius: 22px !important;
-            box-shadow: var(--glass-shadow) !important;
-        }
-
-
-        /* ==========================================================
-           GAME MODE — solid orange, chunky 3D, bold type
-        ========================================================== */
-
-        .stApp, .stApp p, .stApp li, .stApp label, .stApp button,
-        .stApp input, .stApp textarea, .stApp h1, .stApp h2,
-        .stApp h3, .stApp h4, .stApp h5, .stApp h6,
-        .nova-top-logo, .nova-sidebar-logo {
-            font-family: 'Fredoka', 'Segoe UI', system-ui, sans-serif !important;
-        }
-
-        /* sidebar: solid, darker orange with a chunky edge */
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #f57c00, #e86a00) !important;
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
-            border-right: 5px solid #b34d00 !important;
-            box-shadow: 6px 0 0 rgba(120,40,0,0.18) !important;
-        }
-
-        .sidebar-section-title { color: #5c2a00 !important; font-weight: 800 !important; }
-        .nova-sidebar-star { color: #ffe066 !important; text-shadow: 0 2px 0 #b34d00; }
-        .nova-sidebar-logo { font-weight: 800; text-shadow: 0 3px 0 rgba(179,77,0,0.55); }
-
-        /* 3D arcade buttons */
-        .stButton > button,
-        .stDownloadButton > button,
-        .stFormSubmitButton > button,
-        [data-testid="stBaseButton-secondary"] {
-            background: linear-gradient(180deg, #ffb04d, #ff9a24) !important;
-            border: 2px solid #ffd08a !important;
-            border-bottom: 5px solid #b34d00 !important;
-            border-radius: 16px !important;
-            box-shadow: 0 4px 10px rgba(120,40,0,0.25) !important;
-            font-weight: 700 !important;
-            color: #3b1d00 !important;
-            letter-spacing: 0.01em;
-        }
-
-        .stButton > button:hover,
-        .stDownloadButton > button:hover,
-        .stFormSubmitButton > button:hover {
-            filter: brightness(1.08);
-            color: #3b1d00 !important;
-            border-color: #ffe0ad !important;
-            box-shadow: 0 6px 14px rgba(120,40,0,0.3) !important;
-            transform: translateY(-1px);
-        }
-
-        .stButton > button:active,
-        .stDownloadButton > button:active,
-        .stFormSubmitButton > button:active {
-            border-bottom-width: 2px !important;
-            transform: translateY(3px) !important;
-            box-shadow: 0 1px 3px rgba(120,40,0,0.3) !important;
-        }
-
-        /* primary = yellow "power-up" button */
-        [data-testid="stBaseButton-primary"] {
-            background: linear-gradient(180deg, #ffe066, #ffc400) !important;
-            border: 2px solid #fff0a8 !important;
-            border-bottom: 5px solid #b37a00 !important;
-            color: #3b1d00 !important;
-            box-shadow: 0 4px 10px rgba(120,40,0,0.25) !important;
-        }
-        [data-testid="stBaseButton-primary"] p { color: #3b1d00 !important; }
-
-        /* logo pill / title */
-        .nova-top-logo {
-            color: #3b1d00 !important;
-            font-weight: 800;
-            background: linear-gradient(180deg, #ffe066, #ffc400) !important;
-            border: 3px solid #fff0a8 !important;
-            border-bottom: 6px solid #b37a00 !important;
-            box-shadow: 0 6px 14px rgba(120,40,0,0.3) !important;
-        }
-        .nova-top-logo span { color: #b34d00 !important; text-shadow: none !important; }
-
-        .nova-empty-state h1 {
-            color: #fff3d6 !important;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            text-shadow: 0 5px 0 #b34d00, 0 9px 14px rgba(90,30,0,0.35) !important;
-        }
-        .nova-empty-state p { color: #5c2a00 !important; font-weight: 500; }
-
-        /* chat cards: cream "dialog boxes" for readability */
-        [data-testid="stChatMessage"] {
-            background: rgba(255,246,229,0.96) !important;
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
-            border: 3px solid #ffd9a1 !important;
-            border-bottom: 6px solid #c4580a !important;
-            border-radius: 20px !important;
-            box-shadow: 0 6px 14px rgba(120,40,0,0.22) !important;
-        }
-
-        /* chat input: cream inset slot with a chunky yellow send button */
-        [data-testid="stChatInput"] > div {
-            background: #fff3dc !important;
-            border: 3px solid #ffd9a1 !important;
-            border-bottom: 6px solid #c4580a !important;
-            border-radius: 24px !important;
-            box-shadow: inset 0 3px 8px rgba(120,40,0,0.18), 0 8px 18px rgba(120,40,0,0.25) !important;
-        }
-        [data-testid="stChatInput"] button {
-            background: linear-gradient(180deg, #ffe066, #ffc400) !important;
-            border-bottom: 4px solid #b37a00 !important;
-            box-shadow: none !important;
-        }
-        [data-testid="stChatInput"] button svg { fill: #3b1d00 !important; color: #3b1d00 !important; }
-
-        /* cream inputs inside forms/sidebar so typed text is easy to read */
-        div[data-baseweb="input"],
-        div[data-baseweb="textarea"],
-        div[data-baseweb="select"] > div {
-            background: #fff3dc !important;
-            border: 2px solid #ffd9a1 !important;
-            border-bottom: 4px solid #c4580a !important;
-            box-shadow: inset 0 2px 6px rgba(120,40,0,0.15) !important;
-        }
-
-        /* expanders = raised orange panels with a thick base */
-        [data-testid="stExpander"] {
-            border: 2px solid #ffd08a !important;
-            border-bottom: 5px solid #b34d00 !important;
-            box-shadow: 0 4px 10px rgba(120,40,0,0.22) !important;
-        }
-
-        /* follow-ups */
-        .st-key-followup_row .stButton > button {
-            background: linear-gradient(180deg, #fff3dc, #ffe2b3) !important;
-            backdrop-filter: none !important;
-            color: #3b1d00 !important;
-            border: 2px solid #ffd9a1 !important;
-            border-bottom: 5px solid #c4580a !important;
-        }
-        .followup-title { color: #3b1d00 !important; font-weight: 800; }
-
-        /* notification bell */
-        .st-key-notif_corner [data-testid="stPopover"] > div > button,
-        .st-key-notif_corner button[data-testid="stPopoverButton"] {
-            background: linear-gradient(180deg, #ffe066, #ffc400) !important;
-            border: 2px solid #fff0a8 !important;
-            border-bottom: 5px solid #b37a00 !important;
-            box-shadow: 0 4px 10px rgba(120,40,0,0.3) !important;
-            backdrop-filter: none !important;
-        }
-        div[data-testid="stPopoverBody"] {
-            border: 3px solid #ffd9a1 !important;
-            border-bottom: 6px solid #c4580a !important;
-        }
-
-        /* active conversation = pressed in, with a yellow marker */
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat,
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:active {
-            background: rgba(120,40,0,0.22) !important;
-            box-shadow: inset 0 3px 6px rgba(90,30,0,0.35) !important;
-            transform: none !important;
-        }
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button {
-            border: 2px solid transparent !important;
-            border-bottom: 2px solid transparent !important;
-            background: transparent !important;
-            box-shadow: none !important;
-        }
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover {
-            background: rgba(255,224,102,0.35) !important;
-            border: 2px solid #ffd08a !important;
-            transform: none !important;
-            filter: none;
-        }
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover p,
-        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat p {
-            color: #3b1d00 !important;
-        }
 
         /* ---------- Scrollbars ---------- */
 
-        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar { width: 9px; height: 9px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb {
-            background: var(--nm-bg);
-            border-radius: 10px;
-            box-shadow: var(--inset-sm);
+        ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; }
+
+        /* ==========================================================
+           RESPONSIVE + REDUCED MOTION
+        ========================================================== */
+
+        @media (max-width: 900px) {
+            .block-container { padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 3.2rem !important; }
+            .st-key-notif_corner { top: 0.6rem; right: 0.8rem; }
+            .nova-topbar { padding-left: 2.6rem; }
+            .st-key-suggest_row [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+            .st-key-suggest_row [data-testid="stColumn"] { min-width: 100% !important; }
         }
 
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+        }
 
         </style>
         """,
@@ -8005,6 +7543,7 @@ def render_sidebar(api_key):
 
         if st.button(
             "＋  New Chat",
+            key="nav_new_chat",
             use_container_width=True,
         ):
             clear_chat()
@@ -8013,13 +7552,67 @@ def render_sidebar(api_key):
 
         if st.button(
             "📊  Dashboard",
+            key="nav_dashboard",
             use_container_width=True,
         ):
             st.session_state.view = "dashboard"
             st.rerun()
 
+        # ================================
+        # SAVED CONVERSATIONS
+        # ================================
+
         st.markdown(
-            '<div class="sidebar-section-title">AI Mode</div>',
+            '<div class="sidebar-section-title">Recent</div>',
+            unsafe_allow_html=True,
+        )
+
+        chats = get_chats()
+
+        with st.container(key="conversation_list"):
+
+            for chat_id, title, created_at in chats:
+
+                is_current = (
+                    chat_id == st.session_state.current_chat_id
+                )
+
+                if is_current:
+                    button_label = f"●  {title}"
+                else:
+                    button_label = title
+
+                if st.button(
+                    button_label,
+                    key=f"chat_{chat_id}",
+                    use_container_width=True,
+                ):
+
+                    if chat_id != st.session_state.current_chat_id:
+
+                        st.session_state.current_chat_id = chat_id
+
+                        st.session_state.messages = load_chat_messages(
+                            chat_id
+                        )
+
+                    # Always reset to "chat" view (even if this chat
+                    # was already the active one) - lets clicking a
+                    # conversation tile from the Dashboard view bring
+                    # you back to the chat UI.
+                    st.session_state.view = "chat"
+                    st.rerun()
+
+        with st.container(key="danger_chats"):
+            with st.popover("⌫ Delete chat history", use_container_width=True):
+                st.caption("This permanently deletes all saved conversations.")
+                if st.button("Yes, confirm", key="confirm_chats", use_container_width=True):
+                    delete_chat_history()
+                    st.success("Chat history deleted.")
+                    st.rerun()
+
+        st.markdown(
+            '<div class="sidebar-section-title">Model</div>',
             unsafe_allow_html=True,
         )
 
@@ -8054,6 +7647,11 @@ def render_sidebar(api_key):
         # visible instead of disappearing off the list.
         # ================================
 
+        st.markdown(
+            '<div class="sidebar-section-title">Workspace</div>',
+            unsafe_allow_html=True,
+        )
+
         # Most recent first, capped so a busy history doesn't take
         # over the whole sidebar.
         all_leave_requests = get_all_leave_requests()[:15]
@@ -8068,7 +7666,7 @@ def render_sidebar(api_key):
 
             if not all_leave_requests:
                 st.markdown(
-                    '<div style="color:#3b1d00; font-size:0.85rem;">'
+                    '<div style="color:#f2f7ff; font-size:0.85rem;">'
                     "No leave requests yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -8082,7 +7680,7 @@ def render_sidebar(api_key):
 
                     st.markdown(
                         f"""
-                        <div style="color:#3b1d00; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#f2f7ff; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{leave_request['user']}</strong> ·
                             {leave_request['leave_type'].title()} ·
                             {leave_request['start']} to {leave_request['end']}
@@ -8097,18 +7695,21 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:{status_color};
                             ">{status_label}</span>
-                            {f"<br/><span style='color:#5c2a00;'>{leave_request['reason']}</span>" if leave_request.get('reason') else ""}
+                            {f"<br/><span style='color:#cfe0ff;'>{leave_request['reason']}</span>" if leave_request.get('reason') else ""}
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
 
-        if st.button("🗑 Clear Leave Requests", use_container_width=True):
-            if clear_leave_requests():
-                st.success("Leave requests cleared.")
-            else:
-                st.error("Couldn't clear leave requests.")
-            st.rerun()
+        with st.container(key="danger_leave"):
+            with st.popover("🗑 Clear leave requests", use_container_width=True):
+                st.caption("This permanently removes every leave request.")
+                if st.button("Yes, confirm", key="confirm_leave", use_container_width=True):
+                    if clear_leave_requests():
+                        st.success("Leave requests cleared.")
+                    else:
+                        st.error("Couldn't clear leave requests.")
+                    st.rerun()
 
         # ================================
         # PURCHASE ORDER STATUS
@@ -8128,7 +7729,7 @@ def render_sidebar(api_key):
         with st.expander(f"Sent Purchase Orders ({len(sent_po_requests)})"):
             if not sent_po_requests:
                 st.markdown(
-                    '<div style="color:#3b1d00; font-size:0.85rem;">'
+                    '<div style="color:#f2f7ff; font-size:0.85rem;">'
                     "No sent POs yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -8140,7 +7741,7 @@ def render_sidebar(api_key):
                     )
                     st.markdown(
                         f"""
-                        <div style="color:#3b1d00; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#f2f7ff; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{po_request['requester']}</strong> ·
                             {po_request['vendor']} ·
                             ₹{po_request.get('total_amount', 0):,.2f}
@@ -8155,19 +7756,22 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:#3fae5c;
                             ">Sent</span>
-                            <br/><span style="color:#5c2a00;">{po_request.get('department', '')}</span>
-                            <br/><span style="color:#5c2a00;">{po_request.get('vendor_email', '')}</span>
+                            <br/><span style="color:#cfe0ff;">{po_request.get('department', '')}</span>
+                            <br/><span style="color:#cfe0ff;">{po_request.get('vendor_email', '')}</span>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
 
-        if st.button("🗑 Clear POs", use_container_width=True):
-            if clear_po_requests():
-                st.success("PO history cleared.")
-            else:
-                st.error("Couldn't clear PO history.")
-            st.rerun()
+        with st.container(key="danger_po"):
+            with st.popover("🗑 Clear PO history", use_container_width=True):
+                st.caption("This permanently removes the sent PO history.")
+                if st.button("Yes, confirm", key="confirm_po", use_container_width=True):
+                    if clear_po_requests():
+                        st.success("PO history cleared.")
+                    else:
+                        st.error("Couldn't clear PO history.")
+                    st.rerun()
 
         # ================================
         # EXPENSE / REIMBURSEMENT STATUS
@@ -8191,7 +7795,7 @@ def render_sidebar(api_key):
 
             if not all_expense_requests:
                 st.markdown(
-                    '<div style="color:#3b1d00; font-size:0.85rem;">'
+                    '<div style="color:#f2f7ff; font-size:0.85rem;">'
                     "No expense claims yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -8205,7 +7809,7 @@ def render_sidebar(api_key):
 
                     st.markdown(
                         f"""
-                        <div style="color:#3b1d00; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#f2f7ff; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{expense_request['requester']}</strong> ·
                             {expense_request['category'].replace('_', ' ').title()} ·
                             ₹{expense_request.get('amount', 0):,.2f} ·
@@ -8220,18 +7824,21 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:{status_color};
                             ">{status_label}</span>
-                            {f"<br/><span style='color:#5c2a00;'>{expense_request['description']}</span>" if expense_request.get('description') else ""}
+                            {f"<br/><span style='color:#cfe0ff;'>{expense_request['description']}</span>" if expense_request.get('description') else ""}
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
 
-        if st.button("🗑 Clear Expense Claims", use_container_width=True):
-            if clear_expense_requests():
-                st.success("Expense claim history cleared.")
-            else:
-                st.error("Couldn't clear expense claim history.")
-            st.rerun()
+        with st.container(key="danger_expense"):
+            with st.popover("🗑 Clear expense claims", use_container_width=True):
+                st.caption("This permanently removes every expense claim.")
+                if st.button("Yes, confirm", key="confirm_expense", use_container_width=True):
+                    if clear_expense_requests():
+                        st.success("Expense claim history cleared.")
+                    else:
+                        st.error("Couldn't clear expense claim history.")
+                    st.rerun()
 
         st.markdown(
             '<div class="sidebar-section-title">Admin Access</div>',
@@ -8290,12 +7897,12 @@ def render_sidebar(api_key):
                             f"Could not add document: {error}"
                         )
 
-            if st.button(
-                "Clear documents",
-                use_container_width=True,
-            ):
-                clear_documents()
-                st.success("User documents cleared.")
+            with st.container(key="danger_docs"):
+                with st.popover("🗑 Clear documents", use_container_width=True):
+                    st.caption("This removes all user-uploaded documents.")
+                    if st.button("Yes, confirm", key="confirm_docs", use_container_width=True):
+                        clear_documents()
+                        st.success("User documents cleared.")
 
             # ================================
             # INDEXED DOCUMENTS LIST
@@ -8315,7 +7922,7 @@ def render_sidebar(api_key):
             ):
                 if not indexed_documents:
                     st.markdown(
-                        '<div style="color:#3b1d00; font-size:0.85rem;">'
+                        '<div style="color:#f2f7ff; font-size:0.85rem;">'
                         "No documents indexed yet.</div>",
                         unsafe_allow_html=True,
                     )
@@ -8324,9 +7931,9 @@ def render_sidebar(api_key):
                         label = "Admin" if doc["collection"] == "admin" else "User"
                         st.markdown(
                             f"""
-                            <div style="color:#3b1d00; font-size:0.85rem; margin-bottom:0.4rem;">
+                            <div style="color:#f2f7ff; font-size:0.85rem; margin-bottom:0.4rem;">
                                 <strong>{doc['source']}</strong><br/>
-                                <span style="color:#5c2a00;">
+                                <span style="color:#cfe0ff;">
                                     {doc['chunk_count']} chunk(s) · {label}
                                 </span>
                             </div>
@@ -8334,72 +7941,9 @@ def render_sidebar(api_key):
                             unsafe_allow_html=True,
                         )
 
-        # ================================
-        # SAVED CONVERSATIONS
-        # ================================
-
-        st.markdown(
-            '<div class="sidebar-section-title">Conversations</div>',
-            unsafe_allow_html=True,
-        )
-
-        chats = get_chats()
-
-        with st.container(key="conversation_list"):
-
-            for chat_id, title, created_at in chats:
-
-                is_current = (
-                    chat_id == st.session_state.current_chat_id
-                )
-
-                if is_current:
-                    button_label = f"●  {title}"
-                else:
-                    button_label = title
-
-                if st.button(
-                    button_label,
-                    key=f"chat_{chat_id}",
-                    use_container_width=True,
-                ):
-
-                    if chat_id != st.session_state.current_chat_id:
-
-                        st.session_state.current_chat_id = chat_id
-
-                        st.session_state.messages = load_chat_messages(
-                            chat_id
-                        )
-
-                    # Always reset to "chat" view (even if this chat
-                    # was already the active one) - lets clicking a
-                    # conversation tile from the Dashboard view bring
-                    # you back to the chat UI.
-                    st.session_state.view = "chat"
-                    st.rerun()
-
-        if st.button(
-            "⌫  Delete chat history",
-            use_container_width=True,
-        ):
-            delete_chat_history()
-            st.success("Chat history deleted.")
-            st.rerun()
-
         st.markdown(
             """
-            <div style="
-                margin-top:1.5rem;
-                padding:1rem;
-                border:2px solid #ffd08a;
-                border-radius:16px;
-                background:rgba(255,244,226,0.30);
-                box-shadow:5px 5px 12px #c4580a, -5px -5px 12px #ffad4f;
-                color:#5c2a00;
-                font-size:0.78rem;
-                line-height:1.5;
-            ">
+            <div class="nova-sidebar-note">
                 NOVA retrieves information from its
                 stored knowledge base.
             </div>
@@ -8620,14 +8164,42 @@ def main():
         st.markdown(
             """
             <div class="nova-empty-state">
-                <h1>Think it through.</h1>
+                <div class="nova-empty-star">✦</div>
+                <h1>What can I help you with?</h1>
                 <p>
-                    A calm space to ask, explore, and create.
+                    Chat, search your documents, or hand work to NOVA's
+                    agents for mail, meetings, purchase orders, leave
+                    and expenses.
                 </p>
             </div>
             """,
             unsafe_allow_html=True,
         )
+
+        suggestions = [
+            "Summarize the documents in the knowledge base",
+            "What meetings do I have today?",
+            "Draft a leave request for next Friday",
+            "Create a purchase order for office supplies",
+        ]
+
+        with st.container(key="suggest_row"):
+            suggestion_columns = st.columns(2)
+
+            for index, suggestion in enumerate(suggestions):
+                with suggestion_columns[index % 2]:
+                    st.button(
+                        suggestion,
+                        key=f"suggest_{index}",
+                        use_container_width=True,
+                        on_click=lambda q=suggestion: (
+                            st.session_state.__setitem__(
+                                "pending_prompt",
+                                q,
+                            )
+                        ),
+                    )
+
     # ================================
     # CHAT HISTORY
     # ================================
@@ -9228,7 +8800,7 @@ def main():
                 """
                 <div>
                     <span class="nova-loader"></span>
-                    <span style="color:#5c2a00; font-weight:600;">
+                    <span style="color:#0b3d91; font-weight:600;">
                         NOVA is thinking...
                     </span>
                 </div>
