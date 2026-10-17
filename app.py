@@ -441,6 +441,8 @@ def apply_custom_styles():
     st.markdown(
         """
         <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
+
 
         /* ==========================================================
            NOVA — NEUMORPHISM + LIQUID GLASS
@@ -448,26 +450,26 @@ def apply_custom_styles():
         ========================================================== */
 
         :root {
-            --nm-bg: #ece6dc;
-            --nm-bg-2: #e5ded2;
-            --nm-light: #ffffff;
-            --nm-dark: #cbc1b0;
-            --text: #2f2a24;
-            --muted: #7a6f62;
-            --accent: #e08a1e;
-            --accent-ink: #b45309;
-            --accent-light: #f4a340;
-            --accent-soft: rgba(224,138,30,0.12);
-            --glass-bg: rgba(255,255,255,0.42);
-            --glass-bg-strong: rgba(255,255,255,0.62);
-            --glass-border: rgba(255,255,255,0.65);
+            --nm-bg: #ff8c1a;
+            --nm-bg-2: #f07c0a;
+            --nm-light: #ffad4f;
+            --nm-dark: #c4580a;
+            --text: #3b1d00;
+            --muted: #6b3300;
+            --accent: #ffc400;
+            --accent-ink: #5c2a00;
+            --accent-light: #ffe066;
+            --accent-soft: rgba(255,196,0,0.35);
+            --glass-bg: rgba(255,244,226,0.30);
+            --glass-bg-strong: rgba(255,244,226,0.95);
+            --glass-border: rgba(255,214,150,0.85);
             --glass-blur: blur(22px) saturate(170%);
 
             --raised: 8px 8px 18px var(--nm-dark), -8px -8px 18px var(--nm-light);
             --raised-sm: 4px 4px 9px var(--nm-dark), -4px -4px 9px var(--nm-light);
             --inset: inset 5px 5px 10px var(--nm-dark), inset -5px -5px 10px var(--nm-light);
             --inset-sm: inset 3px 3px 6px var(--nm-dark), inset -3px -3px 6px var(--nm-light);
-            --glass-shadow: 0 8px 32px rgba(90,60,20,0.12), inset 0 1px 0 rgba(255,255,255,0.8);
+            --glass-shadow: 0 8px 32px rgba(120,40,0,0.12), inset 0 1px 0 rgba(255,255,255,0.8);
         }
 
         /* ---------- App background (ambient glow so glass has depth) ---------- */
@@ -476,9 +478,9 @@ def apply_custom_styles():
         [data-testid="stAppViewContainer"],
         [data-testid="stMain"] {
             background:
-                radial-gradient(900px 600px at 8% 0%, rgba(244,163,64,0.24), transparent 60%),
-                radial-gradient(800px 600px at 100% 15%, rgba(255,208,140,0.26), transparent 60%),
-                radial-gradient(700px 500px at 50% 100%, rgba(240,120,80,0.12), transparent 60%),
+                radial-gradient(900px 600px at 8% 0%, rgba(255,214,64,0.35), transparent 60%),
+                radial-gradient(800px 600px at 100% 15%, rgba(255,120,40,0.30), transparent 60%),
+                radial-gradient(700px 500px at 50% 100%, rgba(200,60,0,0.25), transparent 60%),
                 var(--nm-bg) !important;
             background-attachment: fixed !important;
             color: var(--text) !important;
@@ -525,7 +527,7 @@ def apply_custom_styles():
             backdrop-filter: var(--glass-blur) !important;
             -webkit-backdrop-filter: var(--glass-blur) !important;
             border-right: 1px solid var(--glass-border) !important;
-            box-shadow: 8px 0 32px rgba(90,60,20,0.08) !important;
+            box-shadow: 8px 0 32px rgba(120,40,0,0.08) !important;
         }
 
         [data-testid="stSidebar"] > div:first-child {
@@ -551,7 +553,7 @@ def apply_custom_styles():
         .nova-sidebar-star {
             color: var(--accent-ink) !important;
             font-size: 2rem;
-            text-shadow: 0 0 18px rgba(224,138,30,0.45);
+            text-shadow: 0 0 18px rgba(255,196,0,0.45);
         }
 
         .nova-sidebar-subtitle {
@@ -626,7 +628,7 @@ def apply_custom_styles():
         .stDownloadButton > button:hover,
         .stFormSubmitButton > button:hover {
             color: var(--accent-ink) !important;
-            border-color: rgba(224,138,30,0.25) !important;
+            border-color: rgba(255,196,0,0.25) !important;
             box-shadow: 6px 6px 13px var(--nm-dark), -6px -6px 13px var(--nm-light) !important;
         }
 
@@ -641,7 +643,7 @@ def apply_custom_styles():
             background: linear-gradient(145deg, var(--accent-light), var(--accent)) !important;
             color: #ffffff !important;
             border-color: rgba(255,255,255,0.25) !important;
-            box-shadow: 5px 5px 12px rgba(224,138,30,0.35), -4px -4px 10px var(--nm-light) !important;
+            box-shadow: 5px 5px 12px rgba(255,196,0,0.35), -4px -4px 10px var(--nm-light) !important;
         }
 
         [data-testid="stBaseButton-primary"] p { color: #ffffff !important; }
@@ -682,8 +684,8 @@ def apply_custom_styles():
         }
 
         input::placeholder, textarea::placeholder {
-            color: #a89c8c !important;
-            -webkit-text-fill-color: #a89c8c !important;
+            color: #8a4a10 !important;
+            -webkit-text-fill-color: #8a4a10 !important;
         }
 
         div[data-baseweb="select"] svg {
@@ -696,7 +698,7 @@ def apply_custom_styles():
         div[data-baseweb="textarea"]:focus-within,
         div[data-baseweb="select"]:focus-within > div {
             outline: none !important;
-            box-shadow: var(--inset), 0 0 0 2px rgba(224,138,30,0.35) !important;
+            box-shadow: var(--inset), 0 0 0 2px rgba(255,196,0,0.35) !important;
         }
 
         /* Number input +/- steppers */
@@ -748,7 +750,7 @@ def apply_custom_styles():
 
         [data-testid="stFileUploader"] section {
             background: var(--nm-bg) !important;
-            border: 1px dashed rgba(224,138,30,0.35) !important;
+            border: 1px dashed rgba(255,196,0,0.35) !important;
             border-radius: 16px !important;
             box-shadow: var(--inset) !important;
             padding: 0.8rem !important;
@@ -836,7 +838,7 @@ def apply_custom_styles():
             color: var(--accent-ink);
             margin-right: 8px;
             font-size: 2.3rem;
-            text-shadow: 0 0 18px rgba(224,138,30,0.5);
+            text-shadow: 0 0 18px rgba(255,196,0,0.5);
         }
 
         /* ==========================================================
@@ -937,7 +939,7 @@ def apply_custom_styles():
             background: var(--nm-bg) !important;
             border: 1px solid rgba(255,255,255,0.6) !important;
             border-radius: 26px !important;
-            box-shadow: var(--inset), 0 10px 30px rgba(90,60,20,0.10) !important;
+            box-shadow: var(--inset), 0 10px 30px rgba(120,40,0,0.10) !important;
             padding: 0.4rem 0.55rem !important;
         }
 
@@ -950,8 +952,8 @@ def apply_custom_styles():
         }
 
         [data-testid="stChatInput"] textarea::placeholder {
-            color: #a89c8c !important;
-            -webkit-text-fill-color: #a89c8c !important;
+            color: #8a4a10 !important;
+            -webkit-text-fill-color: #8a4a10 !important;
         }
 
         [data-testid="stChatInput"] button {
@@ -959,7 +961,7 @@ def apply_custom_styles():
             color: #ffffff !important;
             border-radius: 50% !important;
             border: none !important;
-            box-shadow: 4px 4px 10px rgba(224,138,30,0.35), -3px -3px 8px var(--nm-light) !important;
+            box-shadow: 4px 4px 10px rgba(255,196,0,0.35), -3px -3px 8px var(--nm-light) !important;
         }
 
         [data-testid="stChatInput"] button svg { fill: #ffffff !important; color: #ffffff !important; }
@@ -1088,14 +1090,14 @@ def apply_custom_styles():
         .nova-loader {
             width: 20px;
             height: 20px;
-            border: 3px solid rgba(224,138,30,0.18);
+            border: 3px solid rgba(255,196,0,0.18);
             border-top-color: var(--accent-ink);
             border-radius: 50%;
             animation: nova-spin 0.8s linear infinite;
             display: inline-block;
             margin-right: 10px;
             vertical-align: middle;
-            box-shadow: 0 0 12px rgba(224,138,30,0.25);
+            box-shadow: 0 0 12px rgba(255,196,0,0.25);
         }
 
         @keyframes nova-spin { to { transform: rotate(360deg); } }
@@ -1247,6 +1249,184 @@ def apply_custom_styles():
             border: 1px solid var(--glass-border) !important;
             border-radius: 22px !important;
             box-shadow: var(--glass-shadow) !important;
+        }
+
+
+        /* ==========================================================
+           GAME MODE — solid orange, chunky 3D, bold type
+        ========================================================== */
+
+        .stApp, .stApp p, .stApp li, .stApp label, .stApp button,
+        .stApp input, .stApp textarea, .stApp h1, .stApp h2,
+        .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+        .nova-top-logo, .nova-sidebar-logo {
+            font-family: 'Fredoka', 'Segoe UI', system-ui, sans-serif !important;
+        }
+
+        /* sidebar: solid, darker orange with a chunky edge */
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #f57c00, #e86a00) !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            border-right: 5px solid #b34d00 !important;
+            box-shadow: 6px 0 0 rgba(120,40,0,0.18) !important;
+        }
+
+        .sidebar-section-title { color: #5c2a00 !important; font-weight: 800 !important; }
+        .nova-sidebar-star { color: #ffe066 !important; text-shadow: 0 2px 0 #b34d00; }
+        .nova-sidebar-logo { font-weight: 800; text-shadow: 0 3px 0 rgba(179,77,0,0.55); }
+
+        /* 3D arcade buttons */
+        .stButton > button,
+        .stDownloadButton > button,
+        .stFormSubmitButton > button,
+        [data-testid="stBaseButton-secondary"] {
+            background: linear-gradient(180deg, #ffb04d, #ff9a24) !important;
+            border: 2px solid #ffd08a !important;
+            border-bottom: 5px solid #b34d00 !important;
+            border-radius: 16px !important;
+            box-shadow: 0 4px 10px rgba(120,40,0,0.25) !important;
+            font-weight: 700 !important;
+            color: #3b1d00 !important;
+            letter-spacing: 0.01em;
+        }
+
+        .stButton > button:hover,
+        .stDownloadButton > button:hover,
+        .stFormSubmitButton > button:hover {
+            filter: brightness(1.08);
+            color: #3b1d00 !important;
+            border-color: #ffe0ad !important;
+            box-shadow: 0 6px 14px rgba(120,40,0,0.3) !important;
+            transform: translateY(-1px);
+        }
+
+        .stButton > button:active,
+        .stDownloadButton > button:active,
+        .stFormSubmitButton > button:active {
+            border-bottom-width: 2px !important;
+            transform: translateY(3px) !important;
+            box-shadow: 0 1px 3px rgba(120,40,0,0.3) !important;
+        }
+
+        /* primary = yellow "power-up" button */
+        [data-testid="stBaseButton-primary"] {
+            background: linear-gradient(180deg, #ffe066, #ffc400) !important;
+            border: 2px solid #fff0a8 !important;
+            border-bottom: 5px solid #b37a00 !important;
+            color: #3b1d00 !important;
+            box-shadow: 0 4px 10px rgba(120,40,0,0.25) !important;
+        }
+        [data-testid="stBaseButton-primary"] p { color: #3b1d00 !important; }
+
+        /* logo pill / title */
+        .nova-top-logo {
+            color: #3b1d00 !important;
+            font-weight: 800;
+            background: linear-gradient(180deg, #ffe066, #ffc400) !important;
+            border: 3px solid #fff0a8 !important;
+            border-bottom: 6px solid #b37a00 !important;
+            box-shadow: 0 6px 14px rgba(120,40,0,0.3) !important;
+        }
+        .nova-top-logo span { color: #b34d00 !important; text-shadow: none !important; }
+
+        .nova-empty-state h1 {
+            color: #fff3d6 !important;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            text-shadow: 0 5px 0 #b34d00, 0 9px 14px rgba(90,30,0,0.35) !important;
+        }
+        .nova-empty-state p { color: #5c2a00 !important; font-weight: 500; }
+
+        /* chat cards: cream "dialog boxes" for readability */
+        [data-testid="stChatMessage"] {
+            background: rgba(255,246,229,0.96) !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            border: 3px solid #ffd9a1 !important;
+            border-bottom: 6px solid #c4580a !important;
+            border-radius: 20px !important;
+            box-shadow: 0 6px 14px rgba(120,40,0,0.22) !important;
+        }
+
+        /* chat input: cream inset slot with a chunky yellow send button */
+        [data-testid="stChatInput"] > div {
+            background: #fff3dc !important;
+            border: 3px solid #ffd9a1 !important;
+            border-bottom: 6px solid #c4580a !important;
+            border-radius: 24px !important;
+            box-shadow: inset 0 3px 8px rgba(120,40,0,0.18), 0 8px 18px rgba(120,40,0,0.25) !important;
+        }
+        [data-testid="stChatInput"] button {
+            background: linear-gradient(180deg, #ffe066, #ffc400) !important;
+            border-bottom: 4px solid #b37a00 !important;
+            box-shadow: none !important;
+        }
+        [data-testid="stChatInput"] button svg { fill: #3b1d00 !important; color: #3b1d00 !important; }
+
+        /* cream inputs inside forms/sidebar so typed text is easy to read */
+        div[data-baseweb="input"],
+        div[data-baseweb="textarea"],
+        div[data-baseweb="select"] > div {
+            background: #fff3dc !important;
+            border: 2px solid #ffd9a1 !important;
+            border-bottom: 4px solid #c4580a !important;
+            box-shadow: inset 0 2px 6px rgba(120,40,0,0.15) !important;
+        }
+
+        /* expanders = raised orange panels with a thick base */
+        [data-testid="stExpander"] {
+            border: 2px solid #ffd08a !important;
+            border-bottom: 5px solid #b34d00 !important;
+            box-shadow: 0 4px 10px rgba(120,40,0,0.22) !important;
+        }
+
+        /* follow-ups */
+        .st-key-followup_row .stButton > button {
+            background: linear-gradient(180deg, #fff3dc, #ffe2b3) !important;
+            backdrop-filter: none !important;
+            color: #3b1d00 !important;
+            border: 2px solid #ffd9a1 !important;
+            border-bottom: 5px solid #c4580a !important;
+        }
+        .followup-title { color: #3b1d00 !important; font-weight: 800; }
+
+        /* notification bell */
+        .st-key-notif_corner [data-testid="stPopover"] > div > button,
+        .st-key-notif_corner button[data-testid="stPopoverButton"] {
+            background: linear-gradient(180deg, #ffe066, #ffc400) !important;
+            border: 2px solid #fff0a8 !important;
+            border-bottom: 5px solid #b37a00 !important;
+            box-shadow: 0 4px 10px rgba(120,40,0,0.3) !important;
+            backdrop-filter: none !important;
+        }
+        div[data-testid="stPopoverBody"] {
+            border: 3px solid #ffd9a1 !important;
+            border-bottom: 6px solid #c4580a !important;
+        }
+
+        /* active conversation = pressed in, with a yellow marker */
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat,
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:active {
+            background: rgba(120,40,0,0.22) !important;
+            box-shadow: inset 0 3px 6px rgba(90,30,0,0.35) !important;
+            transform: none !important;
+        }
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button {
+            border: 2px solid transparent !important;
+            border-bottom: 2px solid transparent !important;
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover {
+            background: rgba(255,224,102,0.35) !important;
+            border: 2px solid #ffd08a !important;
+            transform: none !important;
+            filter: none;
+        }
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover p,
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat p {
+            color: #3b1d00 !important;
         }
 
         /* ---------- Scrollbars ---------- */
@@ -7888,7 +8068,7 @@ def render_sidebar(api_key):
 
             if not all_leave_requests:
                 st.markdown(
-                    '<div style="color:#2f2a24; font-size:0.85rem;">'
+                    '<div style="color:#3b1d00; font-size:0.85rem;">'
                     "No leave requests yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -7902,7 +8082,7 @@ def render_sidebar(api_key):
 
                     st.markdown(
                         f"""
-                        <div style="color:#2f2a24; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#3b1d00; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{leave_request['user']}</strong> ·
                             {leave_request['leave_type'].title()} ·
                             {leave_request['start']} to {leave_request['end']}
@@ -7917,7 +8097,7 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:{status_color};
                             ">{status_label}</span>
-                            {f"<br/><span style='color:#7a6f62;'>{leave_request['reason']}</span>" if leave_request.get('reason') else ""}
+                            {f"<br/><span style='color:#5c2a00;'>{leave_request['reason']}</span>" if leave_request.get('reason') else ""}
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -7948,7 +8128,7 @@ def render_sidebar(api_key):
         with st.expander(f"Sent Purchase Orders ({len(sent_po_requests)})"):
             if not sent_po_requests:
                 st.markdown(
-                    '<div style="color:#2f2a24; font-size:0.85rem;">'
+                    '<div style="color:#3b1d00; font-size:0.85rem;">'
                     "No sent POs yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -7960,7 +8140,7 @@ def render_sidebar(api_key):
                     )
                     st.markdown(
                         f"""
-                        <div style="color:#2f2a24; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#3b1d00; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{po_request['requester']}</strong> ·
                             {po_request['vendor']} ·
                             ₹{po_request.get('total_amount', 0):,.2f}
@@ -7975,8 +8155,8 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:#3fae5c;
                             ">Sent</span>
-                            <br/><span style="color:#7a6f62;">{po_request.get('department', '')}</span>
-                            <br/><span style="color:#7a6f62;">{po_request.get('vendor_email', '')}</span>
+                            <br/><span style="color:#5c2a00;">{po_request.get('department', '')}</span>
+                            <br/><span style="color:#5c2a00;">{po_request.get('vendor_email', '')}</span>
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -8011,7 +8191,7 @@ def render_sidebar(api_key):
 
             if not all_expense_requests:
                 st.markdown(
-                    '<div style="color:#2f2a24; font-size:0.85rem;">'
+                    '<div style="color:#3b1d00; font-size:0.85rem;">'
                     "No expense claims yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -8025,7 +8205,7 @@ def render_sidebar(api_key):
 
                     st.markdown(
                         f"""
-                        <div style="color:#2f2a24; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#3b1d00; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{expense_request['requester']}</strong> ·
                             {expense_request['category'].replace('_', ' ').title()} ·
                             ₹{expense_request.get('amount', 0):,.2f} ·
@@ -8040,7 +8220,7 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:{status_color};
                             ">{status_label}</span>
-                            {f"<br/><span style='color:#7a6f62;'>{expense_request['description']}</span>" if expense_request.get('description') else ""}
+                            {f"<br/><span style='color:#5c2a00;'>{expense_request['description']}</span>" if expense_request.get('description') else ""}
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -8135,7 +8315,7 @@ def render_sidebar(api_key):
             ):
                 if not indexed_documents:
                     st.markdown(
-                        '<div style="color:#2f2a24; font-size:0.85rem;">'
+                        '<div style="color:#3b1d00; font-size:0.85rem;">'
                         "No documents indexed yet.</div>",
                         unsafe_allow_html=True,
                     )
@@ -8144,9 +8324,9 @@ def render_sidebar(api_key):
                         label = "Admin" if doc["collection"] == "admin" else "User"
                         st.markdown(
                             f"""
-                            <div style="color:#2f2a24; font-size:0.85rem; margin-bottom:0.4rem;">
+                            <div style="color:#3b1d00; font-size:0.85rem; margin-bottom:0.4rem;">
                                 <strong>{doc['source']}</strong><br/>
-                                <span style="color:#7a6f62;">
+                                <span style="color:#5c2a00;">
                                     {doc['chunk_count']} chunk(s) · {label}
                                 </span>
                             </div>
@@ -8212,12 +8392,11 @@ def render_sidebar(api_key):
             <div style="
                 margin-top:1.5rem;
                 padding:1rem;
-                border:1px solid rgba(255,255,255,0.65);
+                border:2px solid #ffd08a;
                 border-radius:16px;
-                background:rgba(255,255,255,0.42);
-                backdrop-filter:blur(22px) saturate(170%);
-                box-shadow:5px 5px 12px #cbc1b0, -5px -5px 12px #ffffff;
-                color:#7a6f62;
+                background:rgba(255,244,226,0.30);
+                box-shadow:5px 5px 12px #c4580a, -5px -5px 12px #ffad4f;
+                color:#5c2a00;
                 font-size:0.78rem;
                 line-height:1.5;
             ">
@@ -9049,7 +9228,7 @@ def main():
                 """
                 <div>
                     <span class="nova-loader"></span>
-                    <span style="color:#e08a1e;">
+                    <span style="color:#5c2a00; font-weight:600;">
                         NOVA is thinking...
                     </span>
                 </div>
