@@ -442,32 +442,45 @@ def apply_custom_styles():
         """
         <style>
 
-        /* ================================
-           NOVA — GLOBAL
-        ================================= */
+        /* ==========================================================
+           NOVA — NEUMORPHISM + LIQUID GLASS
+           Skin only. Every element/widget/key is untouched.
+        ========================================================== */
 
         :root {
-            --bg: #f5f5f7;
-            --sidebar: #18181c;
-            --sidebar-card: #222228;
-            --text: #1d1d1f;
-            --muted: #73737c;
-            --white: #ffffff;
+            --nm-bg: #e3e7ee;
+            --nm-bg-2: #dde2ea;
+            --nm-light: #ffffff;
+            --nm-dark: #bcc3cf;
+            --text: #2b2f3a;
+            --muted: #6b7280;
             --purple: #6d45e8;
-            --purple-light: #8064f2;
-            --border: rgba(0,0,0,0.08);
+            --purple-light: #8a6cf5;
+            --purple-soft: rgba(109,69,232,0.12);
+            --glass-bg: rgba(255,255,255,0.42);
+            --glass-bg-strong: rgba(255,255,255,0.62);
+            --glass-border: rgba(255,255,255,0.65);
+            --glass-blur: blur(22px) saturate(170%);
+
+            --raised: 8px 8px 18px var(--nm-dark), -8px -8px 18px var(--nm-light);
+            --raised-sm: 4px 4px 9px var(--nm-dark), -4px -4px 9px var(--nm-light);
+            --inset: inset 5px 5px 10px var(--nm-dark), inset -5px -5px 10px var(--nm-light);
+            --inset-sm: inset 3px 3px 6px var(--nm-dark), inset -3px -3px 6px var(--nm-light);
+            --glass-shadow: 0 8px 32px rgba(31,38,80,0.12), inset 0 1px 0 rgba(255,255,255,0.8);
         }
 
-        .stApp {
-            background: var(--bg) !important;
-        }
+        /* ---------- App background (ambient glow so glass has depth) ---------- */
 
-        [data-testid="stAppViewContainer"] {
-            background: var(--bg) !important;
-        }
-
+        .stApp,
+        [data-testid="stAppViewContainer"],
         [data-testid="stMain"] {
-            background: var(--bg) !important;
+            background:
+                radial-gradient(900px 600px at 8% 0%, rgba(138,108,245,0.20), transparent 60%),
+                radial-gradient(800px 600px at 100% 15%, rgba(99,179,237,0.18), transparent 60%),
+                radial-gradient(700px 500px at 50% 100%, rgba(236,130,200,0.12), transparent 60%),
+                var(--nm-bg) !important;
+            background-attachment: fixed !important;
+            color: var(--text) !important;
         }
 
         [data-testid="stHeader"] {
@@ -480,26 +493,54 @@ def apply_custom_styles():
             padding-bottom: 8rem !important;
         }
 
+        [data-testid="stBottom"],
+        [data-testid="stBottom"] > div,
+        [data-testid="stBottomBlockContainer"] {
+            background: transparent !important;
+        }
 
-        /* ================================
-           SIDEBAR
-        ================================= */
+        h1, h2, h3, h4, h5, h6, label, .stMarkdown, [data-testid="stWidgetLabel"] p {
+            color: var(--text) !important;
+        }
+
+        [data-testid="stCaptionContainer"], .stCaption, small {
+            color: var(--muted) !important;
+        }
+
+        hr {
+            border: none !important;
+            height: 2px !important;
+            border-radius: 2px;
+            background: var(--nm-bg) !important;
+            box-shadow: var(--inset-sm) !important;
+        }
+
+        /* ==========================================================
+           SIDEBAR  (liquid glass panel)
+        ========================================================== */
 
         [data-testid="stSidebar"] {
-            background: #202025 !important;
-            border-right: 1px solid rgba(0,0,0,0.08);
+            background: var(--glass-bg) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            -webkit-backdrop-filter: var(--glass-blur) !important;
+            border-right: 1px solid var(--glass-border) !important;
+            box-shadow: 8px 0 32px rgba(31,38,80,0.08) !important;
         }
 
         [data-testid="stSidebar"] > div:first-child {
             padding: 1.5rem 1rem !important;
+            background: transparent !important;
         }
 
-       
+        [data-testid="stSidebar"] * {
+            color: var(--text);
+        }
+
         .nova-sidebar-logo {
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #f2f2f4 !important;
+            color: var(--text) !important;
             font-size: 1.8rem;
             font-weight: 800;
             letter-spacing: -0.05em;
@@ -507,19 +548,20 @@ def apply_custom_styles():
         }
 
         .nova-sidebar-star {
-            color: var(--purple-light) !important;
+            color: var(--purple) !important;
             font-size: 2rem;
+            text-shadow: 0 0 18px rgba(109,69,232,0.45);
         }
 
         .nova-sidebar-subtitle {
-            color: #85858e !important;
+            color: var(--muted) !important;
             font-size: 0.82rem;
             margin-left: 2px;
             margin-bottom: 1.3rem;
         }
 
         .sidebar-section-title {
-            color: #85858e !important;
+            color: var(--muted) !important;
             font-size: 0.68rem;
             font-weight: 700;
             letter-spacing: 0.13em;
@@ -527,160 +569,246 @@ def apply_custom_styles():
             margin: 1.25rem 0 0.55rem;
         }
 
+        /* ---------- Sidebar collapse / expand button ---------- */
 
-        /* =========================================
-           NOVA SIDEBAR — CONTROL OVERRIDE
-        ========================================= */
-
-        /* ---------- AI MODE SELECTBOX ---------- */
-
-        [data-testid="stSidebar"] div[data-baseweb="select"] {
-            width: 100% !important;
+        [data-testid="stSidebar"] button[kind="headerNoPadding"],
+        [data-testid="stSidebarCollapseButton"] button,
+        [data-testid="stExpandSidebarButton"] {
+            color: var(--text) !important;
+            background: var(--nm-bg) !important;
+            border: none !important;
+            border-radius: 12px !important;
+            box-shadow: var(--raised-sm) !important;
+            opacity: 1 !important;
         }
 
-        [data-testid="stSidebar"] div[data-baseweb="select"] > div {
-            width: 100% !important;
+        [data-testid="stSidebar"] button[kind="headerNoPadding"] *,
+        [data-testid="stSidebar"] button[kind="headerNoPadding"] svg,
+        [data-testid="stSidebarCollapseButton"] svg,
+        [data-testid="stExpandSidebarButton"] svg {
+            color: var(--text) !important;
+            fill: var(--text) !important;
+            opacity: 1 !important;
+        }
+
+        [data-testid="stSidebar"] button[kind="headerNoPadding"]:hover {
+            box-shadow: var(--inset-sm) !important;
+        }
+
+        /* ==========================================================
+           BUTTONS  (raised -> pressed)
+        ========================================================== */
+
+        .stButton > button,
+        .stDownloadButton > button,
+        .stFormSubmitButton > button,
+        [data-testid="stBaseButton-secondary"],
+        [data-testid="stBaseButton-primary"] {
             min-height: 42px !important;
-
-            background: #29292f !important;
-            background-color: #29292f !important;
-
-            border: 1px solid rgba(255,255,255,0.09) !important;
-            border-radius: 11px !important;
-
-            box-shadow: none !important;
-        }
-
-        [data-testid="stSidebar"] div[data-baseweb="select"] * {
-            color: #eeeeef !important;
-        }
-
-        [data-testid="stSidebar"] div[data-baseweb="select"] svg {
-            fill: #85858e !important;
-            color: #85858e !important;
-        }
-
-        [data-testid="stSidebar"] div[data-baseweb="select"] > div > div {
-            background: transparent !important;
-        }
-
-        /* ---------- DROPDOWN MENU ---------- */
-
-        div[data-baseweb="popover"] {
-            background: #1b1b20 !important;
-            border: 1px solid rgba(255,255,255,0.10) !important;
-        }
-
-        div[data-baseweb="popover"] [role="option"] {
-            background: #1b1b20 !important;
-            color: #eeeeef !important;
-        }
-
-        div[data-baseweb="popover"] [role="option"]:hover {
-            background: #292931 !important;
-        }
-
-
-
-        /* ---------- SIDEBAR BUTTONS ---------- */
-
-        [data-testid="stSidebar"] .stButton {
-            width: 100% !important;
-        }
-
-        [data-testid="stSidebar"] .stButton > button {
-            width: 100% !important;
-            min-height: 42px !important;
-
-            background: #29292f !important;
-            background-color: #29292f !important;
-            color: #eeeeef !important;
-
-            border: 1px solid rgba(255,255,255,0.09) !important;
-            border-radius: 11px !important;
-
-            box-shadow: none !important;
-
+            background: var(--nm-bg) !important;
+            background-color: var(--nm-bg) !important;
+            color: var(--text) !important;
+            border: 1px solid rgba(255,255,255,0.55) !important;
+            border-radius: 14px !important;
+            box-shadow: var(--raised-sm) !important;
             font-size: 0.88rem !important;
-            font-weight: 500 !important;
-
-            transition:
-                background-color 0.18s ease,
-                border-color 0.18s ease,
-                transform 0.15s ease;
+            font-weight: 600 !important;
+            transition: box-shadow 0.18s ease, transform 0.15s ease, color 0.18s ease !important;
         }
 
-        [data-testid="stSidebar"] .stButton > button:hover {
-            background: #323239 !important;
-            background-color: #323239 !important;
-            color: #ffffff !important;
-            border-color: rgba(128,100,242,0.35) !important;
+        .stButton > button p,
+        .stDownloadButton > button p {
+            color: inherit !important;
         }
 
-        [data-testid="stSidebar"] .stButton > button:active {
+        .stButton > button:hover,
+        .stDownloadButton > button:hover,
+        .stFormSubmitButton > button:hover {
+            color: var(--purple) !important;
+            border-color: rgba(109,69,232,0.25) !important;
+            box-shadow: 6px 6px 13px var(--nm-dark), -6px -6px 13px var(--nm-light) !important;
+        }
+
+        .stButton > button:active,
+        .stDownloadButton > button:active,
+        .stFormSubmitButton > button:active {
+            box-shadow: var(--inset-sm) !important;
             transform: scale(0.985);
         }
 
-        /* ---------- FOCUS ---------- */
-
-        [data-testid="stSidebar"] input:focus,
-        [data-testid="stSidebar"] [data-baseweb="select"]:focus-within {
-            outline: none !important;
-            box-shadow: 0 0 0 1px rgba(128,100,242,0.5) !important;
+        [data-testid="stBaseButton-primary"] {
+            background: linear-gradient(145deg, var(--purple-light), var(--purple)) !important;
+            color: #ffffff !important;
+            border-color: rgba(255,255,255,0.25) !important;
+            box-shadow: 5px 5px 12px rgba(109,69,232,0.35), -4px -4px 10px var(--nm-light) !important;
         }
 
-        /* ---------- SIDEBAR EXPANDER (e.g. "Indexed Documents") ---------- */
+        [data-testid="stBaseButton-primary"] p { color: #ffffff !important; }
 
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary,
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary p,
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary span {
-            color: #eeeeef !important;
+        [data-testid="stSidebar"] .stButton { width: 100% !important; }
+        [data-testid="stSidebar"] .stButton > button { width: 100% !important; }
+
+        /* ==========================================================
+           INPUTS, SELECTS, UPLOADER  (inset wells)
+        ========================================================== */
+
+        div[data-baseweb="input"],
+        div[data-baseweb="base-input"],
+        div[data-baseweb="textarea"],
+        div[data-baseweb="select"] > div,
+        [data-testid="stNumberInput"] div[data-baseweb="input"],
+        [data-testid="stDateInput"] div[data-baseweb="input"],
+        [data-testid="stTimeInput"] div[data-baseweb="select"] > div {
+            background: var(--nm-bg) !important;
+            background-color: var(--nm-bg) !important;
+            border: 1px solid transparent !important;
+            border-radius: 14px !important;
+            box-shadow: var(--inset) !important;
+            min-height: 42px;
         }
 
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary svg {
-            fill: #eeeeef !important;
-        }
-
-        /* ================================
-           ADMIN UPLOADER
-        ================================= */
-
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] {
-            width: 100% !important;
-        }
-
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] section {
-            background: #29292f !important;
-            border: 1px dashed rgba(255,255,255,0.16) !important;
-            border-radius: 11px !important;
-            padding: 0.8rem !important;
-        }
-
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] section > div {
+        div[data-baseweb="input"] > div,
+        div[data-baseweb="base-input"],
+        div[data-baseweb="select"] > div > div {
             background: transparent !important;
         }
 
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] small {
-            color: #85858e !important;
+        input, textarea,
+        div[data-baseweb="select"] *,
+        div[data-baseweb="input"] input {
+            color: var(--text) !important;
+            -webkit-text-fill-color: var(--text) !important;
         }
 
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] button {
-            background: #323239 !important;
-            color: #eeeeef !important;
-            border: 1px solid rgba(255,255,255,0.09) !important;
-            border-radius: 8px !important;
+        input::placeholder, textarea::placeholder {
+            color: #9aa1ad !important;
+            -webkit-text-fill-color: #9aa1ad !important;
         }
 
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] button:hover {
-            background: #3a3a42 !important;
-            border-color: rgba(128,100,242,0.35) !important;
+        div[data-baseweb="select"] svg {
+            fill: var(--muted) !important;
+            color: var(--muted) !important;
         }
 
+        input:focus,
+        div[data-baseweb="input"]:focus-within,
+        div[data-baseweb="textarea"]:focus-within,
+        div[data-baseweb="select"]:focus-within > div {
+            outline: none !important;
+            box-shadow: var(--inset), 0 0 0 2px rgba(109,69,232,0.35) !important;
+        }
 
+        /* Number input +/- steppers */
+        [data-testid="stNumberInput"] button {
+            background: var(--nm-bg) !important;
+            color: var(--text) !important;
+            border: none !important;
+            box-shadow: var(--raised-sm) !important;
+            border-radius: 10px !important;
+        }
 
-        /* ================================
+        /* ---------- Dropdown menus / popovers (glass) ---------- */
+
+        div[data-baseweb="popover"],
+        div[data-baseweb="popover"] > div,
+        div[data-baseweb="menu"],
+        ul[role="listbox"] {
+            background: var(--glass-bg-strong) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            -webkit-backdrop-filter: var(--glass-blur) !important;
+            border: 1px solid var(--glass-border) !important;
+            border-radius: 16px !important;
+            box-shadow: var(--glass-shadow) !important;
+        }
+
+        div[data-baseweb="popover"] [role="option"],
+        ul[role="listbox"] li {
+            background: transparent !important;
+            color: var(--text) !important;
+            border-radius: 10px !important;
+        }
+
+        div[data-baseweb="popover"] [role="option"]:hover,
+        div[data-baseweb="popover"] [aria-selected="true"],
+        ul[role="listbox"] li:hover {
+            background: var(--purple-soft) !important;
+            color: var(--purple) !important;
+        }
+
+        /* Calendar popup */
+        div[data-baseweb="calendar"] {
+            background: transparent !important;
+            color: var(--text) !important;
+        }
+
+        /* ---------- File uploader ---------- */
+
+        [data-testid="stFileUploader"] { width: 100% !important; }
+
+        [data-testid="stFileUploader"] section {
+            background: var(--nm-bg) !important;
+            border: 1px dashed rgba(109,69,232,0.35) !important;
+            border-radius: 16px !important;
+            box-shadow: var(--inset) !important;
+            padding: 0.8rem !important;
+        }
+
+        [data-testid="stFileUploader"] section > div { background: transparent !important; }
+
+        [data-testid="stFileUploader"] label,
+        [data-testid="stFileUploader"] span,
+        [data-testid="stFileUploader"] p { color: var(--text) !important; }
+
+        [data-testid="stFileUploader"] small { color: var(--muted) !important; }
+
+        [data-testid="stFileUploader"] button {
+            background: var(--nm-bg) !important;
+            color: var(--text) !important;
+            border: none !important;
+            border-radius: 12px !important;
+            box-shadow: var(--raised-sm) !important;
+        }
+
+        [data-testid="stFileUploader"] button:hover { color: var(--purple) !important; }
+
+        [data-testid="stFileUploaderFile"] {
+            background: var(--glass-bg) !important;
+            border-radius: 12px !important;
+        }
+
+        /* ==========================================================
+           EXPANDERS  (raised cards)
+        ========================================================== */
+
+        [data-testid="stExpander"] {
+            background: var(--nm-bg) !important;
+            border: 1px solid rgba(255,255,255,0.55) !important;
+            border-radius: 16px !important;
+            box-shadow: var(--raised-sm) !important;
+            overflow: hidden;
+        }
+
+        [data-testid="stExpander"] details,
+        [data-testid="stExpander"] summary { background: transparent !important; }
+
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] summary p,
+        [data-testid="stExpander"] summary span {
+            color: var(--text) !important;
+            font-weight: 600;
+        }
+
+        [data-testid="stExpander"] summary svg {
+            fill: var(--text) !important;
+            color: var(--text) !important;
+        }
+
+        [data-testid="stExpander"] summary:hover,
+        [data-testid="stExpander"] summary:hover p { color: var(--purple) !important; }
+
+        /* ==========================================================
            MAIN HEADER
-        ================================= */
+        ========================================================== */
 
         .nova-topbar {
             display: flex;
@@ -690,21 +818,29 @@ def apply_custom_styles():
         }
 
         .nova-top-logo {
-            color: #5b38c9;
-            font-size: 2.3rem;
+            color: var(--text);
+            font-size: 2.1rem;
             font-weight: 800;
             letter-spacing: -0.04em;
+            padding: 0.55rem 1.8rem;
+            border-radius: 999px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--raised-sm), var(--glass-shadow);
         }
 
         .nova-top-logo span {
             color: var(--purple);
             margin-right: 8px;
-            font-size: 2.5rem;
+            font-size: 2.3rem;
+            text-shadow: 0 0 18px rgba(109,69,232,0.5);
         }
 
-        /* ================================
+        /* ==========================================================
            EMPTY STATE
-        ================================= */
+        ========================================================== */
 
         .nova-empty-state {
             min-height: 58vh;
@@ -723,42 +859,72 @@ def apply_custom_styles():
         }
 
         .nova-empty-state h1 {
-            color: var(--text);
+            color: var(--text) !important;
             font-size: clamp(2.8rem, 5vw, 4rem);
             font-weight: 750;
             letter-spacing: -0.06em;
             line-height: 1;
             margin: 0;
+            text-shadow: 3px 3px 6px var(--nm-dark), -3px -3px 6px var(--nm-light);
         }
 
         .nova-empty-state p {
-            color: var(--muted);
+            color: var(--muted) !important;
             font-size: 1.05rem;
             margin-top: 1rem;
-        }       
+        }
 
-        /* ================================
-           CHAT
-        ================================= */
+        /* ==========================================================
+           CHAT MESSAGES  (liquid glass cards)
+        ========================================================== */
 
         [data-testid="stChatMessage"] {
-            border-radius: 18px !important;
-            border: 1px solid var(--border) !important;
-            background: white !important;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.04) !important;
-            padding: 0.8rem 1rem !important;
+            border-radius: 22px !important;
+            border: 1px solid var(--glass-border) !important;
+            background: var(--glass-bg) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            -webkit-backdrop-filter: var(--glass-blur) !important;
+            box-shadow: var(--raised-sm), var(--glass-shadow) !important;
+            padding: 0.9rem 1.1rem !important;
             margin: 1rem 0 !important;
         }
 
         [data-testid="stChatMessage"] p,
-        [data-testid="stChatMessage"] li {
-            color: var(--text) !important;
+        [data-testid="stChatMessage"] li,
+        [data-testid="stChatMessage"] span,
+        [data-testid="stChatMessage"] h1,
+        [data-testid="stChatMessage"] h2,
+        [data-testid="stChatMessage"] h3 { color: var(--text) !important; }
+
+        [data-testid="stChatMessageAvatarUser"],
+        [data-testid="stChatMessageAvatarAssistant"],
+        [data-testid^="stChatMessageAvatar"] {
+            background: var(--nm-bg) !important;
+            color: var(--purple) !important;
+            border-radius: 50% !important;
+            box-shadow: var(--raised-sm) !important;
         }
 
+        /* code blocks & tables inside answers */
+        pre, code, [data-testid="stCode"], [data-testid="stCodeBlock"] {
+            background: var(--nm-bg) !important;
+            color: var(--text) !important;
+            border-radius: 12px !important;
+        }
 
-        /* ================================
-           CHAT INPUT
-        ================================= */
+        pre { box-shadow: var(--inset-sm) !important; }
+
+        .stMarkdown table { border-collapse: separate; border-spacing: 0; }
+
+        .stMarkdown th, .stMarkdown td {
+            border-color: rgba(0,0,0,0.06) !important;
+            color: var(--text) !important;
+            background: transparent !important;
+        }
+
+        /* ==========================================================
+           CHAT INPUT  (inset neumorphic pill)
+        ========================================================== */
 
         [data-testid="stChatInput"] {
             background: transparent !important;
@@ -767,56 +933,156 @@ def apply_custom_styles():
         }
 
         [data-testid="stChatInput"] > div {
-            background: white !important;
-            border: 1px solid rgba(0,0,0,0.1) !important;
-            border-radius: 22px !important;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.08) !important;
+            background: var(--nm-bg) !important;
+            border: 1px solid rgba(255,255,255,0.6) !important;
+            border-radius: 26px !important;
+            box-shadow: var(--inset), 0 10px 30px rgba(31,38,80,0.10) !important;
             padding: 0.4rem 0.55rem !important;
         }
 
         [data-testid="stChatInput"] textarea {
             color: var(--text) !important;
+            -webkit-text-fill-color: var(--text) !important;
             background: transparent !important;
             font-size: 1rem !important;
+            box-shadow: none !important;
         }
 
         [data-testid="stChatInput"] textarea::placeholder {
-            color: #888894 !important;
+            color: #9aa1ad !important;
+            -webkit-text-fill-color: #9aa1ad !important;
         }
 
         [data-testid="stChatInput"] button {
-            background: var(--purple) !important;
-            color: white !important;
+            background: linear-gradient(145deg, var(--purple-light), var(--purple)) !important;
+            color: #ffffff !important;
             border-radius: 50% !important;
+            border: none !important;
+            box-shadow: 4px 4px 10px rgba(109,69,232,0.35), -3px -3px 8px var(--nm-light) !important;
         }
 
-        [data-testid="stChatInput"] button:hover {
-            background: var(--purple-light) !important;
+        [data-testid="stChatInput"] button svg { fill: #ffffff !important; color: #ffffff !important; }
+
+        [data-testid="stChatInput"] button:hover { filter: brightness(1.08); }
+
+        /* Native mic / audio recorder */
+        [data-testid="stAudioInput"],
+        [data-testid="stAudioInput"] > div {
+            background: var(--nm-bg) !important;
+            border-radius: 16px !important;
+            box-shadow: var(--inset-sm) !important;
         }
 
+        audio { border-radius: 14px; filter: sepia(0.05) saturate(0.9); }
 
-        /* ================================
+        /* ==========================================================
            FOLLOW-UP BUTTONS
-        ================================= */
+        ========================================================== */
 
         .followup-title {
-            color: #24242a;
+            color: var(--text);
             font-weight: 700;
             margin-top: 1rem;
             margin-bottom: 0.5rem;
         }
 
         .st-key-followup_row .stButton > button {
-            background: white !important;
-            border: 1px solid rgba(109,69,232,0.18) !important;
+            background: var(--glass-bg) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            -webkit-backdrop-filter: var(--glass-blur) !important;
+            border: 1px solid var(--glass-border) !important;
             color: var(--purple) !important;
-            border-radius: 12px !important;
+            border-radius: 16px !important;
+            box-shadow: var(--raised-sm) !important;
         }
 
+        .st-key-followup_row .stButton > button:hover {
+            box-shadow: var(--inset-sm) !important;
+        }
 
-        /* ================================
+        /* ==========================================================
+           ALERTS / STATUS / SPINNER / TOAST  (glass)
+        ========================================================== */
+
+        [data-testid="stAlert"],
+        [data-testid="stNotification"],
+        [data-testid="stStatusWidget"],
+        [data-testid="stStatus"],
+        [data-testid="stToast"] {
+            background: var(--glass-bg-strong) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            -webkit-backdrop-filter: var(--glass-blur) !important;
+            border: 1px solid var(--glass-border) !important;
+            border-radius: 16px !important;
+            box-shadow: var(--glass-shadow) !important;
+            color: var(--text) !important;
+        }
+
+        [data-testid="stAlert"] p, [data-testid="stAlert"] div,
+        [data-testid="stToast"] p { color: var(--text) !important; }
+
+        [data-testid="stSpinner"] p { color: var(--muted) !important; }
+
+        /* ==========================================================
+           DATA TABLES / EDITOR / TABS / CHECKS / DIALOGS
+        ========================================================== */
+
+        [data-testid="stDataFrame"],
+        [data-testid="stDataEditor"],
+        [data-testid="stTable"] {
+            background: var(--nm-bg) !important;
+            border-radius: 16px !important;
+            box-shadow: var(--inset-sm) !important;
+            padding: 4px;
+            overflow: hidden;
+        }
+
+        .stTabs [data-baseweb="tab-list"] {
+            background: var(--nm-bg) !important;
+            border-radius: 16px !important;
+            box-shadow: var(--inset-sm) !important;
+            padding: 4px !important;
+            gap: 4px !important;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 12px !important;
+            color: var(--muted) !important;
+            background: transparent !important;
+        }
+
+        .stTabs [aria-selected="true"] {
+            color: var(--purple) !important;
+            background: var(--nm-bg) !important;
+            box-shadow: var(--raised-sm) !important;
+        }
+
+        .stTabs [data-baseweb="tab-highlight"],
+        .stTabs [data-baseweb="tab-border"] { display: none !important; }
+
+        [data-testid="stCheckbox"] label span[data-baseweb="checkbox"] > div,
+        [data-baseweb="radio"] > div:first-child {
+            background: var(--nm-bg) !important;
+            border-color: transparent !important;
+            box-shadow: var(--inset-sm) !important;
+        }
+
+        div[role="dialog"],
+        [data-testid="stDialog"] > div > div {
+            background: var(--glass-bg-strong) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            -webkit-backdrop-filter: var(--glass-blur) !important;
+            border: 1px solid var(--glass-border) !important;
+            border-radius: 24px !important;
+            box-shadow: var(--glass-shadow) !important;
+        }
+
+        [data-testid="stProgress"] > div > div { background: var(--nm-bg) !important; box-shadow: var(--inset-sm) !important; }
+        [data-testid="stProgress"] > div > div > div { background: linear-gradient(90deg, var(--purple-light), var(--purple)) !important; }
+
+        /* ==========================================================
            LOADER
-        ================================= */
+        ========================================================== */
 
         .nova-loader {
             width: 20px;
@@ -828,235 +1094,117 @@ def apply_custom_styles():
             display: inline-block;
             margin-right: 10px;
             vertical-align: middle;
+            box-shadow: 0 0 12px rgba(109,69,232,0.25);
         }
 
-        @keyframes nova-spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
+        @keyframes nova-spin { to { transform: rotate(360deg); } }
 
-
-        /* ================================
-           FOOTER
-        ================================= */
+        /* ==========================================================
+           FOOTER / HIDDEN INSTRUCTION
+        ========================================================== */
 
         .nova-footer {
             text-align: center;
-            color: #8a8a93;
+            color: var(--muted);
             font-size: 0.72rem;
             margin-top: 0.7rem;
         }
-        /* Hide Streamlit text-input instruction */
-        [data-testid="InputInstructions"] {
-            display: none !important;
+
+        [data-testid="InputInstructions"] { display: none !important; }
+
+        /* ==========================================================
+           CONVERSATION LIST  (flat rows -> inset when active)
+        ========================================================== */
+
+        [data-testid="stSidebar"] .st-key-conversation_list {
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
-        /* ================================
-           ADMIN KNOWLEDGE BASE
-        ================================= */
-
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] label {
-            color: #eeeeef !important;
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton {
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] small {
-            color: #b8b8c2 !important;
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button {
+            width: 100% !important;
+            min-height: 38px !important;
+            height: 38px !important;
+            margin: 2px 0 !important;
+            padding: 0 12px !important;
+            background: transparent !important;
+            background-color: transparent !important;
+            border: 1px solid transparent !important;
+            border-radius: 12px !important;
+            color: var(--text) !important;
+            font-size: 0.86rem !important;
+            font-weight: 500 !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
         }
 
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] span {
-            color: #eeeeef !important;
-        }
-
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] p {
-            color: #b8b8c2 !important;
-        }
-
-        /* ================================
-           SIDEBAR COLLAPSE BUTTON
-        ================================= */
-
-        [data-testid="stSidebar"] button[kind="headerNoPadding"] {
-            color: #ffffff !important;
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button > div {
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
-            opacity: 1 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            text-align: left !important;
         }
 
-        [data-testid="stSidebar"] button[kind="headerNoPadding"] *,
-        [data-testid="stSidebar"] button[kind="headerNoPadding"] svg,
-        [data-testid="stSidebar"] button[kind="headerNoPadding"] svg path {
-            color: #ffffff !important;
-            fill: #ffffff !important;
-            stroke: #ffffff !important;
-            opacity: 1 !important;
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button p {
+            color: var(--text) !important;
+            background: transparent !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            font-size: 0.86rem !important;
+            text-align: left !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
         }
 
-        [data-testid="stSidebar"] button[kind="headerNoPadding"]:hover {
-            background: rgba(255,255,255,0.08) !important;
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover {
+            background: var(--glass-bg) !important;
+            border-color: var(--glass-border) !important;
+            box-shadow: var(--raised-sm) !important;
+            color: var(--purple) !important;
         }
 
-/* =========================================
-   CHATGPT-STYLE CONVERSATION LIST
-========================================= */
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover p {
+            color: var(--purple) !important;
+        }
 
-/* Conversation list container */
-[data-testid="stSidebar"] .st-key-conversation_list {
-    margin: 0 !important;
-    padding: 0 !important;
-}
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button:active,
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat {
+            background: var(--nm-bg) !important;
+            border-color: transparent !important;
+            box-shadow: var(--inset-sm) !important;
+        }
 
-/* Remove spacing around conversation buttons */
-[data-testid="stSidebar"] .st-key-conversation_list .stButton {
-    margin: 0 !important;
-    padding: 0 !important;
-}
+        [data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat p {
+            color: var(--purple) !important;
+            font-weight: 700 !important;
+        }
 
-/* Conversation button */
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button {
-    width: 100% !important;
+        /* ---------- Scrollbars ---------- */
 
-    min-height: 36px !important;
-    height: 36px !important;
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: var(--nm-bg);
+            border-radius: 10px;
+            box-shadow: var(--inset-sm);
+        }
 
-    margin: 1px 0 !important;
-    padding: 0 10px !important;
-
-    background: transparent !important;
-    background-color: transparent !important;
-
-    border: 1px solid transparent !important;
-    border-radius: 8px !important;
-
-    color: #eeeeef !important;
-
-    font-size: 0.86rem !important;
-    font-weight: 400 !important;
-
-    text-align: left !important;
-    justify-content: flex-start !important;
-
-    box-shadow: none !important;
-
-    overflow: hidden !important;
-
-    transition:
-        background-color 0.15s ease,
-        color 0.15s ease !important;
-}
-
-/* Remove Streamlit's internal button backgrounds */
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button > div {
-    background: transparent !important;
-    background-color: transparent !important;
-
-    border: none !important;
-    box-shadow: none !important;
-
-    width: 100% !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-/* Conversation text */
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button p {
-    color: #eeeeef !important;
-
-    background: transparent !important;
-    background-color: transparent !important;
-
-    width: 100% !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    font-size: 0.86rem !important;
-    font-weight: 400 !important;
-
-    text-align: left !important;
-
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-}
-
-/* Hover */
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover {
-    background: #29292f !important;
-    background-color: #29292f !important;
-
-    border: 1px solid transparent !important;
-
-    color: #ffffff !important;
-}
-
-/* Keep contents transparent on hover */
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover > div,
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button:hover p {
-    background: transparent !important;
-    background-color: transparent !important;
-}
-
-/* =========================================
-   ACTIVE CONVERSATION
-========================================= */
-
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat {
-    background: #29292f !important;
-    background-color: #29292f !important;
-
-    border-color: transparent !important;
-}
-
-/* Active text */
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button.active-chat p {
-    color: #ffffff !important;
-    font-weight: 500 !important;
-}
-
-/* =========================================
-   CONVERSATION LIST — LEFT ALIGNMENT
-========================================= */
-
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button {
-    text-align: left !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-
-    padding-left: 10px !important;
-}
-
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button > div {
-    width: 100% !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-
-    text-align: left !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    background: transparent !important;
-}
-
-[data-testid="stSidebar"] .st-key-conversation_list .stButton > button p {
-    width: 100% !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    text-align: left !important;
-
-    color: #eeeeef !important;
-
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-}
 
         </style>
         """,
@@ -7686,7 +7834,7 @@ def render_sidebar(api_key):
 
             if not all_leave_requests:
                 st.markdown(
-                    '<div style="color:#eeeeef; font-size:0.85rem;">'
+                    '<div style="color:#2b2f3a; font-size:0.85rem;">'
                     "No leave requests yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -7700,7 +7848,7 @@ def render_sidebar(api_key):
 
                     st.markdown(
                         f"""
-                        <div style="color:#eeeeef; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#2b2f3a; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{leave_request['user']}</strong> ·
                             {leave_request['leave_type'].title()} ·
                             {leave_request['start']} to {leave_request['end']}
@@ -7715,7 +7863,7 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:{status_color};
                             ">{status_label}</span>
-                            {f"<br/><span style='color:#b8b8c2;'>{leave_request['reason']}</span>" if leave_request.get('reason') else ""}
+                            {f"<br/><span style='color:#6b7280;'>{leave_request['reason']}</span>" if leave_request.get('reason') else ""}
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -7746,7 +7894,7 @@ def render_sidebar(api_key):
         with st.expander(f"Sent Purchase Orders ({len(sent_po_requests)})"):
             if not sent_po_requests:
                 st.markdown(
-                    '<div style="color:#eeeeef; font-size:0.85rem;">'
+                    '<div style="color:#2b2f3a; font-size:0.85rem;">'
                     "No sent POs yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -7758,7 +7906,7 @@ def render_sidebar(api_key):
                     )
                     st.markdown(
                         f"""
-                        <div style="color:#eeeeef; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#2b2f3a; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{po_request['requester']}</strong> ·
                             {po_request['vendor']} ·
                             ₹{po_request.get('total_amount', 0):,.2f}
@@ -7773,8 +7921,8 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:#3fae5c;
                             ">Sent</span>
-                            <br/><span style="color:#b8b8c2;">{po_request.get('department', '')}</span>
-                            <br/><span style="color:#b8b8c2;">{po_request.get('vendor_email', '')}</span>
+                            <br/><span style="color:#6b7280;">{po_request.get('department', '')}</span>
+                            <br/><span style="color:#6b7280;">{po_request.get('vendor_email', '')}</span>
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -7809,7 +7957,7 @@ def render_sidebar(api_key):
 
             if not all_expense_requests:
                 st.markdown(
-                    '<div style="color:#eeeeef; font-size:0.85rem;">'
+                    '<div style="color:#2b2f3a; font-size:0.85rem;">'
                     "No expense claims yet.</div>",
                     unsafe_allow_html=True,
                 )
@@ -7823,7 +7971,7 @@ def render_sidebar(api_key):
 
                     st.markdown(
                         f"""
-                        <div style="color:#eeeeef; font-size:0.85rem; margin-bottom:0.6rem;">
+                        <div style="color:#2b2f3a; font-size:0.85rem; margin-bottom:0.6rem;">
                             <strong>{expense_request['requester']}</strong> ·
                             {expense_request['category'].replace('_', ' ').title()} ·
                             ₹{expense_request.get('amount', 0):,.2f} ·
@@ -7838,7 +7986,7 @@ def render_sidebar(api_key):
                                 color:#ffffff;
                                 background:{status_color};
                             ">{status_label}</span>
-                            {f"<br/><span style='color:#b8b8c2;'>{expense_request['description']}</span>" if expense_request.get('description') else ""}
+                            {f"<br/><span style='color:#6b7280;'>{expense_request['description']}</span>" if expense_request.get('description') else ""}
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -7933,7 +8081,7 @@ def render_sidebar(api_key):
             ):
                 if not indexed_documents:
                     st.markdown(
-                        '<div style="color:#eeeeef; font-size:0.85rem;">'
+                        '<div style="color:#2b2f3a; font-size:0.85rem;">'
                         "No documents indexed yet.</div>",
                         unsafe_allow_html=True,
                     )
@@ -7942,9 +8090,9 @@ def render_sidebar(api_key):
                         label = "Admin" if doc["collection"] == "admin" else "User"
                         st.markdown(
                             f"""
-                            <div style="color:#eeeeef; font-size:0.85rem; margin-bottom:0.4rem;">
+                            <div style="color:#2b2f3a; font-size:0.85rem; margin-bottom:0.4rem;">
                                 <strong>{doc['source']}</strong><br/>
-                                <span style="color:#b8b8c2;">
+                                <span style="color:#6b7280;">
                                     {doc['chunk_count']} chunk(s) · {label}
                                 </span>
                             </div>
@@ -8010,9 +8158,12 @@ def render_sidebar(api_key):
             <div style="
                 margin-top:1.5rem;
                 padding:1rem;
-                border:1px solid rgba(109,69,232,0.35);
-                border-radius:12px;
-                color:#9999a5;
+                border:1px solid rgba(255,255,255,0.65);
+                border-radius:16px;
+                background:rgba(255,255,255,0.42);
+                backdrop-filter:blur(22px) saturate(170%);
+                box-shadow:5px 5px 12px #bcc3cf, -5px -5px 12px #ffffff;
+                color:#6b7280;
                 font-size:0.78rem;
                 line-height:1.5;
             ">
